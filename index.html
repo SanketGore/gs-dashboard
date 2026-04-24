@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GS Agencies — Business Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
@@ -104,9 +104,63 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .tag-forecast{display:inline-block;background:#eaf4fb;color:var(--blue);font-size:10px;font-weight:600;padding:2px 6px;border-radius:3px;margin-left:4px;}
 
 /* ── Responsive ── */
-@media(max-width:1000px){.g-3{grid-template-columns:1fr 1fr;}.kpi-row{grid-template-columns:repeat(3,1fr);}}
-@media(max-width:700px){.g-2,.g-3{grid-template-columns:1fr;}.kpi-row{grid-template-columns:repeat(2,1fr);}.top-bar{flex-direction:column;align-items:stretch;}.filter-row{justify-content:center;}.tab{padding:7px 12px;font-size:12px;}}
-@media(max-width:400px){.kpi-row{grid-template-columns:1fr 1fr;}}
+/* Tab bar scrolls horizontally on narrow screens */
+.tab-bar{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.tab-bar::-webkit-scrollbar{display:none;}
+.tab{flex-shrink:0;}
+
+/* Filter toggle button — shown only on mobile */
+#filter-toggle{display:none;width:100%;padding:7px 12px;font-size:12px;font-weight:600;
+  background:var(--bg);border:1px solid var(--border);border-radius:5px;cursor:pointer;
+  color:var(--accent);text-align:left;}
+#filter-panel{transition:max-height .25s ease,opacity .25s ease;}
+
+/* Info bar */
+.info-bar{background:var(--card);border-bottom:1px solid var(--border);
+  padding:5px 16px;font-size:11px;color:var(--dim);display:flex;
+  flex-wrap:wrap;align-items:center;gap:12px;}
+.info-bar strong{color:var(--accent);}
+
+/* ── 1000px ── */
+@media(max-width:1000px){
+  .g-3{grid-template-columns:1fr 1fr;}
+  .kpi-row{grid-template-columns:repeat(3,1fr);}
+}
+
+/* ── 700px (tablet/large phone) ── */
+@media(max-width:700px){
+  .g-2,.g-3{grid-template-columns:1fr;}
+  .kpi-row{grid-template-columns:repeat(2,1fr);gap:8px;padding:10px 12px 4px;}
+  .kpi-card{padding:10px 12px;}
+  .kpi-val{font-size:15px;}
+  .kpi-lbl{font-size:8px;}
+  .top-bar{padding:6px 12px;gap:4px;}
+  .top-bar h1{font-size:13px;}
+  .filter-row{display:none;flex-direction:column;align-items:stretch;gap:6px;
+    padding:8px 0 4px;}
+  .filter-row.open{display:flex;}
+  .filter-row input,.filter-row select{width:100%;font-size:13px;padding:7px 8px;}
+  .filter-row input[type="date"]{width:100%;}
+  #filter-toggle{display:block;}
+  .tab{padding:8px 14px;font-size:11px;}
+  .content{padding:8px 10px 12px;}
+  .chart-card{padding:10px;}
+  .chart-canvas-wrap{height:200px!important;}
+  .chart-title{font-size:11px;}
+  .alert-table{font-size:10px;}
+  .alert-table th,.alert-table td{padding:4px 6px;}
+}
+
+/* ── 480px (small phone) ── */
+@media(max-width:480px){
+  .kpi-row{grid-template-columns:1fr 1fr;gap:6px;padding:8px 10px 4px;}
+  .kpi-card{padding:8px 10px;gap:7px;}
+  .kpi-icon{font-size:15px;}
+  .kpi-val{font-size:14px;}
+  .chart-canvas-wrap{height:180px!important;}
+  .forecast-table{font-size:10px;}
+  .forecast-table th,.forecast-table td{padding:5px 7px;}
+}
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
 .fade-in{animation:fadeUp .35s ease-out both;}
 </style>
@@ -135,7 +189,8 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
   <div class="top-bar">
     <h1>🏠 GS Agencies</h1>
     <span class="spacer"></span>
-    <div class="filter-row">
+    <button id="filter-toggle" onclick="toggleFilters()">⚙️ Filters ▾</button>
+    <div id="filter-panel" class="filter-row">
       <label>From</label><input type="date" id="f-from">
       <label>To</label><input type="date" id="f-to">
       <select id="f-period"><option value="Monthly">Monthly</option><option value="Daily">Daily</option><option value="Yearly">Yearly</option></select>
@@ -146,6 +201,11 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
     </div>
   </div>
 
+  <!-- Info bar -->
+  <div class="info-bar" id="info-bar" style="display:none;">
+    <span>📅 Sales data up to: <strong id="latest-date">—</strong></span>
+    <span>⏱️ Exported: <span id="export-ts2">—</span></span>
+  </div>
   <!-- KPI row -->
   <div class="kpi-row fade-in" id="kpi-row"></div>
   <!-- Debug banner — hidden until charts load, shows status if they fail -->
@@ -323,6 +383,16 @@ function canvas(id){return document.getElementById(id);}
 function ctx(id){const c=canvas(id);return c?c.getContext('2d'):null;}
 
 // ══════════════════════════════════════════════
+// Filter panel toggle (mobile)
+// ══════════════════════════════════════════════
+function toggleFilters(){
+  const panel=document.getElementById('filter-panel');
+  const btn=document.getElementById('filter-toggle');
+  panel.classList.toggle('open');
+  btn.textContent=panel.classList.contains('open')?'⚙️ Filters ▴':'⚙️ Filters ▾';
+}
+
+// ══════════════════════════════════════════════
 // Tab switching
 // ══════════════════════════════════════════════
 function switchTab(id,el){
@@ -382,6 +452,13 @@ function initDashboard(){
   document.getElementById('upload-screen').style.display='none';
   document.getElementById('dashboard').style.display='block';
   document.getElementById('export-ts').textContent=DATA.exported_at||'—';
+  // Populate info bar
+  const allDates=[...(DATA.stock_out||[]).map(r=>r.sale_date),...(DATA.sales_summary||[]).map(r=>r.sale_date)]
+    .filter(Boolean).sort();
+  const latestDate=allDates.length?allDates[allDates.length-1]:'—';
+  document.getElementById('latest-date').textContent=latestDate;
+  document.getElementById('export-ts2').textContent=DATA.exported_at||'—';
+  document.getElementById('info-bar').style.display='flex';
   populateFilters();
   // Default date range: last 3 months of data
   const dates=(DATA.stock_out||[]).map(r=>r.sale_date).filter(Boolean).sort();
