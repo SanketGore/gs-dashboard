@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>GS Agencies — Business Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f0f2f6; --card: #ffffff; --border: #dce1e8;
+  --text: #1a2a3a; --dim: #6b7b8d; --accent: #1a3a5c;
+  --blue: #2980b9; --green: #27ae60; --orange: #e67e22;
+  --red: #e74c3c; --teal: #1abc9c; --purple: #8e44ad;
+  --navy: #1a5276; --card-r: 10px; --shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family:'DM Sans',system-ui,sans-serif; background:var(--bg);
+  color:var(--text); min-height:100vh; overflow-x:hidden;
+}
+/* ── Upload screen ─────────────────────────────────── */
+#upload-screen {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  min-height:100vh; padding:24px; text-align:center;
+}
+#upload-screen h1 { font-size:clamp(1.6rem,4vw,2.4rem); color:var(--accent); margin-bottom:8px; }
+#upload-screen p { color:var(--dim); max-width:480px; margin-bottom:24px; font-size:14px; line-height:1.5; }
+.upload-zone {
+  border:2px dashed var(--blue); border-radius:16px; padding:48px 40px;
+  cursor:pointer; transition:all .2s; background:rgba(41,128,185,0.04);
+  max-width:500px; width:100%;
+}
+.upload-zone:hover { border-color:var(--accent); background:rgba(41,128,185,0.08); transform:translateY(-2px); }
+.upload-zone .icon { font-size:48px; margin-bottom:12px; }
+.upload-zone .label { font-weight:600; color:var(--accent); font-size:15px; }
+.upload-zone .sub { color:var(--dim); font-size:12px; margin-top:6px; }
+#file-input { display:none; }
+.cached-banner {
+  margin-top:20px; padding:12px 20px; background:#eaf4fb; border:1px solid #aed6f1;
+  border-radius:8px; font-size:13px; color:var(--accent); cursor:pointer;
+}
+.cached-banner:hover { background:#d4eaf8; }
+
+/* ── Dashboard ─────────────────────────────────────── */
+#dashboard { display:none; }
+.top-bar {
+  background:var(--card); border-bottom:1px solid var(--border);
+  padding:10px 16px; display:flex; align-items:center; flex-wrap:wrap; gap:8px;
+  position:sticky; top:0; z-index:100; box-shadow:var(--shadow);
+}
+.top-bar h1 { font-size:16px; color:var(--accent); white-space:nowrap; }
+.top-bar .spacer { flex:1; }
+.filter-row { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+.filter-row label { font-size:11px; font-weight:600; color:var(--dim); }
+.filter-row input, .filter-row select {
+  font-family:inherit; font-size:12px; padding:4px 8px;
+  border:1px solid var(--border); border-radius:4px; background:var(--card);
+  color:var(--text); font-weight:500;
+}
+.filter-row input[type="date"] { width:120px; }
+.btn { padding:6px 14px; border:none; border-radius:5px; font-weight:600; font-size:12px; cursor:pointer; transition:all .15s; }
+.btn-blue { background:var(--blue); color:#fff; }
+.btn-blue:hover { background:#2471a3; }
+.btn-sm { padding:4px 10px; font-size:11px; }
+.btn-outline { background:transparent; border:1px solid var(--border); color:var(--dim); }
+.btn-outline:hover { background:var(--bg); }
+
+/* ── KPI cards ─────────────────────────────────────── */
+.kpi-row { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; padding:12px 16px 4px; }
+.kpi-card {
+  background:var(--card); border:1px solid var(--border); border-radius:var(--card-r);
+  padding:12px 14px; display:flex; align-items:flex-start; gap:10px;
+  box-shadow:var(--shadow); transition:transform .15s;
+}
+.kpi-card:hover { transform:translateY(-2px); }
+.kpi-bar { width:3px; min-height:42px; border-radius:2px; flex-shrink:0; }
+.kpi-icon { font-size:18px; }
+.kpi-val { font-family:'JetBrains Mono',monospace; font-size:clamp(14px,2vw,20px); font-weight:700; }
+.kpi-lbl { font-size:9px; font-weight:600; color:var(--dim); text-transform:uppercase; letter-spacing:0.5px; }
+
+/* ── Chart grid ────────────────────────────────────── */
+.content { padding:8px 16px 16px; }
+.chart-grid { display:grid; gap:10px; }
+.row-2 { grid-template-columns:6fr 4fr; }
+.row-2b { grid-template-columns:35fr 65fr; }
+.chart-card {
+  background:var(--card); border:1px solid var(--border); border-radius:var(--card-r);
+  padding:12px 14px; box-shadow:var(--shadow); display:flex; flex-direction:column;
+  min-height:0;
+}
+.chart-title { font-size:12px; font-weight:700; color:var(--accent); margin-bottom:6px; }
+.chart-wrap { position:relative; flex:1; min-height:200px; }
+.chart-wrap canvas { width:100%!important; }
+
+/* ── Alert table ───────────────────────────────────── */
+.alert-card { background:#fff8f0; border:1px solid #f0a500; }
+.alert-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+.alert-title { font-size:12px; font-weight:700; color:var(--red); }
+.alert-count { font-size:11px; color:var(--dim); }
+.alert-table { width:100%; border-collapse:collapse; font-size:11px; }
+.alert-table th { background:var(--accent); color:#fff; padding:6px 8px; text-align:left; font-size:10px; font-weight:600; }
+.alert-table td { padding:5px 8px; border-bottom:1px solid #f0e0c8; }
+.alert-table tr:nth-child(even) { background:#fef9f0; }
+.status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; }
+
+/* ── Empty state ───────────────────────────────────── */
+.empty-msg { text-align:center; color:var(--dim); padding:40px 20px; font-size:13px; }
+
+/* ── Responsive ────────────────────────────────────── */
+@media(max-width:900px) {
+  .kpi-row { grid-template-columns:repeat(3,1fr); }
+  .row-2, .row-2b { grid-template-columns:1fr; }
+  .top-bar { flex-direction:column; align-items:stretch; }
+  .top-bar h1 { text-align:center; margin-bottom:4px; }
+  .filter-row { justify-content:center; }
+}
+@media(max-width:600px) {
+  .kpi-row { grid-template-columns:repeat(2,1fr); gap:6px; padding:8px 10px 4px; }
+  .kpi-card { padding:8px 10px; }
+  .kpi-val { font-size:14px; }
+  .content { padding:6px 10px 10px; }
+  .chart-card { padding:8px 10px; }
+  .chart-wrap { min-height:180px; }
+  .filter-row input[type="date"] { width:100px; }
+}
+@media(max-width:400px) {
+  .kpi-row { grid-template-columns:1fr 1fr; }
+}
+
+/* ── Fade-in animation ─────────────────────────────── */
+@keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+.fade-in { animation:fadeUp .4s ease-out both; }
+.fade-in:nth-child(2) { animation-delay:.05s; }
+.fade-in:nth-child(3) { animation-delay:.1s; }
+.fade-in:nth-child(4) { animation-delay:.15s; }
+.fade-in:nth-child(5) { animation-delay:.2s; }
+</style>
+</head>
+<body>
+
+<!-- ═════════════════════════════════════════════════════ -->
+<!-- UPLOAD SCREEN                                        -->
+<!-- ═════════════════════════════════════════════════════ -->
+<div id="upload-screen">
+  <h1>🏠 GS Agencies Dashboard</h1>
+  <p>The dashboard loads automatically when data has been pushed from the desktop app. If no data is found, upload the <strong>dashboard_data.json</strong> file manually below.</p>
+  <div class="upload-zone" onclick="document.getElementById('file-input').click()">
+    <div class="icon">📊</div>
+    <div class="label">Click to upload dashboard_data.json</div>
+    <div class="sub">or drag & drop the file here</div>
+  </div>
+  <input type="file" id="file-input" accept=".json">
+  <div id="cached-msg" class="cached-banner" style="display:none" onclick="loadCached()">
+    📋 Previously loaded data available — click to use it
+  </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════ -->
+<!-- DASHBOARD                                            -->
+<!-- ═════════════════════════════════════════════════════ -->
+<div id="dashboard">
+  <!-- Top bar with filters -->
+  <div class="top-bar">
+    <h1>🏠 GS Agencies — Dashboard</h1>
+    <span class="spacer"></span>
+    <div class="filter-row">
+      <label>From</label><input type="date" id="f-from">
+      <label>To</label><input type="date" id="f-to">
+      <select id="f-period"><option>Monthly</option><option>Daily</option><option>Yearly</option></select>
+      <select id="f-metric"><option value="revenue">Sales Revenue</option><option value="profit">Gross Profit</option></select>
+      <select id="f-location"><option value="">All Locations</option></select>
+      <select id="f-customer"><option value="">All Customers</option></select>
+      <select id="f-product"><option value="">All Products</option></select>
+      <button class="btn btn-blue btn-sm" onclick="applyFilters()">Apply</button>
+      <button class="btn btn-outline btn-sm" onclick="showUpload()">📂 New File</button>
+    </div>
+  </div>
+
+  <!-- KPI cards -->
+  <div class="kpi-row" id="kpi-row"></div>
+
+  <!-- Charts -->
+  <div class="content">
+    <!-- Row 1: Trend + Product Revenue -->
+    <div class="chart-grid row-2 fade-in" style="margin-bottom:10px">
+      <div class="chart-card">
+        <div class="chart-title" id="trend-title">Revenue & COGS by Month</div>
+        <div class="chart-wrap"><canvas id="chart-trend"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Total Revenue by Product</div>
+        <div class="chart-wrap"><canvas id="chart-products"></canvas></div>
+      </div>
+    </div>
+    <!-- Row 2: Outstanding + Low Stock -->
+    <div class="chart-grid row-2b fade-in">
+      <div class="chart-card">
+        <div class="chart-title">Outstanding Dues</div>
+        <div class="chart-wrap"><canvas id="chart-outstanding"></canvas></div>
+      </div>
+      <div class="chart-card alert-card">
+        <div class="alert-header">
+          <span class="alert-title">⚠️ Low Stock Alerts</span>
+          <span class="alert-count" id="low-stock-count"></span>
+        </div>
+        <div id="low-stock-body"></div>
+      </div>
+    </div>
+  </div>
+  <div style="text-align:center;padding:8px;font-size:10px;color:var(--dim)">
+    Data exported: <span id="export-ts">—</span>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════
+let DATA = null;
+let charts = {};
+
+// ═══════════════════════════════════════════════════════════
+// File handling
+// ═══════════════════════════════════════════════════════════
+const fileInput = document.getElementById('file-input');
+const uploadZone = document.querySelector('.upload-zone');
+
+fileInput.addEventListener('change', e => { if(e.target.files[0]) loadFile(e.target.files[0]); });
+
+// Drag & drop
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.style.borderColor='var(--accent)'; });
+uploadZone.addEventListener('dragleave', () => { uploadZone.style.borderColor='var(--blue)'; });
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.style.borderColor='var(--blue)';
+  if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      DATA = JSON.parse(e.target.result);
+      // Cache in localStorage (up to 5MB is safe)
+      try { localStorage.setItem('gs_dashboard_data', e.target.result); } catch(err) {}
+      initDashboard();
+    } catch(err) { alert('Invalid JSON file: ' + err.message); }
+  };
+  reader.readAsText(file);
+}
+
+function loadCached() {
+  const raw = localStorage.getItem('gs_dashboard_data');
+  if(raw) { DATA = JSON.parse(raw); initDashboard(); }
+}
+
+function showUpload() {
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('upload-screen').style.display = 'flex';
+}
+
+// ── Auto-fetch from GitHub repo on load ─────────────────────────────
+// When the JSON file is pushed to the same repo as this page,
+// the dashboard loads automatically without any manual upload.
+// Falls back to localStorage cache, then shows the upload screen.
+window.addEventListener('DOMContentLoaded', async () => {
+  // Try fetching dashboard_data.json from the same origin (GitHub Pages)
+  try {
+    const res = await fetch('./dashboard_data.json?_=' + Date.now());
+    if (res.ok) {
+      const text = await res.text();
+      DATA = JSON.parse(text);
+      // Cache it for offline use
+      try { localStorage.setItem('gs_dashboard_data', text); } catch(e) {}
+      initDashboard();
+      return;  // done — no upload screen needed
+    }
+  } catch(e) {
+    // fetch failed (e.g. file not yet pushed) — fall through
+  }
+
+  // Fall back: use cached data from a previous session
+  if (localStorage.getItem('gs_dashboard_data')) {
+    document.getElementById('cached-msg').style.display = 'block';
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════════════════════
+function initDashboard() {
+  document.getElementById('upload-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('export-ts').textContent = DATA.exported_at || '—';
+
+  // Populate filter dropdowns
+  populateFilters();
+
+  // Set default date range
+  const dates = (DATA.stock_out||[]).map(r=>r.sale_date).filter(Boolean).sort();
+  if(dates.length) {
+    const last = dates[dates.length-1];
+    document.getElementById('f-to').value = last;
+    // 3 months back
+    const d = new Date(last); d.setMonth(d.getMonth()-3);
+    document.getElementById('f-from').value = d.toISOString().split('T')[0];
+  }
+
+  applyFilters();
+}
+
+function populateFilters() {
+  // Locations
+  const locs = [...new Set((DATA.customers||[]).map(c=>c.location||'Unknown'))].sort();
+  const locSel = document.getElementById('f-location');
+  locSel.innerHTML = '<option value="">All Locations</option>';
+  locs.forEach(l => { const o=document.createElement('option'); o.value=l; o.textContent=l; locSel.appendChild(o); });
+
+  // Customers
+  const custs = [...new Set((DATA.customers||[]).map(c=>c.customer_name))].sort();
+  const custSel = document.getElementById('f-customer');
+  custSel.innerHTML = '<option value="">All Customers</option>';
+  custs.forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c.length>25?c.slice(0,25)+'…':c; custSel.appendChild(o); });
+
+  // Products
+  const prods = [...new Set((DATA.products||[]).map(p=>p.product_name))].sort();
+  const prodSel = document.getElementById('f-product');
+  prodSel.innerHTML = '<option value="">All Products</option>';
+  prods.forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=p.length>30?p.slice(0,30)+'…':p; prodSel.appendChild(o); });
+}
+
+// ═══════════════════════════════════════════════════════════
+// Filtering
+// ═══════════════════════════════════════════════════════════
+function getFilters() {
+  return {
+    from: document.getElementById('f-from').value,
+    to: document.getElementById('f-to').value,
+    period: document.getElementById('f-period').value,
+    metric: document.getElementById('f-metric').value,
+    location: document.getElementById('f-location').value,
+    customer: document.getElementById('f-customer').value,
+    product: document.getElementById('f-product').value,
+  };
+}
+
+function filterStockOut(f) {
+  let rows = DATA.stock_out || [];
+  if(f.from) rows = rows.filter(r => r.sale_date >= f.from);
+  if(f.to)   rows = rows.filter(r => r.sale_date <= f.to);
+  if(f.product)  rows = rows.filter(r => r.product_name === f.product);
+  if(f.customer) rows = rows.filter(r => r.customer_name === f.customer);
+  if(f.location) {
+    const custLoc = {};
+    (DATA.customers||[]).forEach(c => { custLoc[c.customer_name] = c.location||'Unknown'; });
+    rows = rows.filter(r => custLoc[r.customer_name] === f.location);
+  }
+  return rows;
+}
+
+function filterSalesSummary(f) {
+  let rows = DATA.sales_summary || [];
+  if(f.from) rows = rows.filter(r => r.sale_date >= f.from);
+  if(f.to)   rows = rows.filter(r => r.sale_date <= f.to);
+  if(f.customer) rows = rows.filter(r => r.customer_name === f.customer);
+  if(f.location) {
+    const custLoc = {};
+    (DATA.customers||[]).forEach(c => { custLoc[c.customer_name] = c.location||'Unknown'; });
+    rows = rows.filter(r => custLoc[r.customer_name] === f.location);
+  }
+  return rows;
+}
+
+// ═══════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════
+function fmt(v) {
+  if(Math.abs(v)>=100000) return '₹ '+(v/100000).toFixed(2)+'L';
+  if(Math.abs(v)>=1000) return '₹ '+(v/1000).toFixed(1)+'K';
+  return '₹ '+v.toFixed(0);
+}
+
+function groupBy(arr, keyFn) {
+  const map = {};
+  arr.forEach(r => { const k=keyFn(r); map[k]=(map[k]||0); });
+  return map;
+}
+
+function sumBy(arr, keyFn, valFn) {
+  const map = {};
+  arr.forEach(r => { const k=keyFn(r); map[k]=(map[k]||0)+valFn(r); });
+  return map;
+}
+
+function periodKey(date, period) {
+  if(period==='Daily') return date;
+  if(period==='Yearly') return date?.slice(0,4);
+  return date?.slice(0,7); // Monthly
+}
+
+function destroyChart(id) { if(charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+const COLORS = { blue:'#2980b9', teal:'#1abc9c', green:'#27ae60', orange:'#e67e22', red:'#e74c3c', purple:'#8e44ad', navy:'#1a5276' };
+const BLUES = ['#1a5276','#2471a3','#2980b9','#5dade2','#85c1e9','#aed6f1','#d4e6f1','#21618c','#154360','#7fb3d3'];
+
+// ═══════════════════════════════════════════════════════════
+// Apply filters — recalculate everything
+// ═══════════════════════════════════════════════════════════
+function applyFilters() {
+  const f = getFilters();
+  const so = filterStockOut(f);
+  const ss = filterSalesSummary(f);
+
+  // ── KPIs ───────────────────────────────────────────────
+  let revenue, profit;
+  if(f.metric==='profit' || f.product) {
+    revenue = so.reduce((s,r) => s + (r.total_sale||0), 0);
+  } else {
+    revenue = ss.filter(r=>!(r.reference_invoice_id||'').startsWith('PAY-')).reduce((s,r)=>s+(r.total_bill||0),0);
+  }
+  profit = so.reduce((s,r) => s + ((r.total_sale||0)-(r.buying_rate_at_time||0)), 0);
+
+  // Outstanding — filter by customer/location but not date/product
+  let ssAll = DATA.sales_summary||[];
+  if(f.customer) ssAll = ssAll.filter(r=>r.customer_name===f.customer);
+  if(f.location) {
+    const cl={}; (DATA.customers||[]).forEach(c=>{cl[c.customer_name]=c.location||'Unknown';});
+    ssAll = ssAll.filter(r=>cl[r.customer_name]===f.location);
+  }
+  const custBal = {};
+  ssAll.forEach(r => { custBal[r.customer_name]=(custBal[r.customer_name]||0)+(r.balance_due||0); });
+  const outstanding = Object.values(custBal).filter(v=>v>0.005).reduce((s,v)=>s+v,0);
+
+  // Stock valuation
+  let prods = DATA.products||[];
+  if(f.product) prods = prods.filter(p=>p.product_name===f.product);
+  const stockVal = prods.reduce((s,p)=>s+(p.current_stock||0)*(p.cost_price_unit||0),0);
+
+  // Purchases
+  let si = DATA.stock_in||[];
+  if(f.from) si=si.filter(r=>r.transaction_date>=f.from);
+  if(f.to) si=si.filter(r=>r.transaction_date<=f.to);
+  if(f.product) {
+    const pidSet=new Set(prods.map(p=>p.product_id));
+    si=si.filter(r=>pidSet.has(r.product_id));
+  }
+  const purchases = si.reduce((s,r)=>s+(r.total_cost||0),0);
+
+  const kpiData = [
+    { icon:'💰', label: f.metric==='profit'?'TOTAL GROSS PROFIT':'TOTAL REVENUE', value:fmt(f.metric==='profit'?profit:revenue), color:COLORS.blue },
+    { icon:'📈', label:'GROSS PROFIT', value:fmt(profit), color:COLORS.green },
+    { icon:'⏳', label:'OUTSTANDING DUES', value:fmt(outstanding), color:COLORS.orange },
+    { icon:'📦', label:'STOCK VALUATION', value:fmt(stockVal), color:COLORS.purple },
+    { icon:'🛒', label:'TOTAL PURCHASES', value:fmt(purchases), color:COLORS.navy },
+  ];
+  renderKPIs(kpiData);
+
+  // ── Charts ─────────────────────────────────────────────
+  renderTrend(so, ss, f);
+  renderProducts(so, f);
+  renderOutstanding(custBal);
+  renderLowStock();
+}
+
+// ═══════════════════════════════════════════════════════════
+// KPI cards
+// ═══════════════════════════════════════════════════════════
+function renderKPIs(data) {
+  const row = document.getElementById('kpi-row');
+  row.innerHTML = data.map((d,i) => `
+    <div class="kpi-card fade-in" style="animation-delay:${i*0.05}s">
+      <div class="kpi-bar" style="background:${d.color}"></div>
+      <div>
+        <div class="kpi-icon">${d.icon}</div>
+        <div class="kpi-val" style="color:${d.color}">${d.value}</div>
+        <div class="kpi-lbl">${d.label}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// Trend chart
+// ═══════════════════════════════════════════════════════════
+function renderTrend(so, ss, f) {
+  const period = f.period;
+  const isProfit = f.metric==='profit';
+
+  // Main series
+  let mainMap;
+  if(isProfit || f.product) {
+    if(isProfit) {
+      mainMap = sumBy(so, r=>periodKey(r.sale_date,period), r=>(r.total_sale||0)-(r.buying_rate_at_time||0));
+    } else {
+      mainMap = sumBy(so, r=>periodKey(r.sale_date,period), r=>r.total_sale||0);
+    }
+  } else {
+    const invOnly = ss.filter(r=>!(r.reference_invoice_id||'').startsWith('PAY-'));
+    mainMap = sumBy(invOnly, r=>periodKey(r.sale_date,period), r=>r.total_bill||0);
+  }
+
+  // COGS series
+  const cogsMap = sumBy(so, r=>periodKey(r.sale_date,period), r=>r.buying_rate_at_time||0);
+
+  const allKeys = [...new Set([...Object.keys(mainMap),...Object.keys(cogsMap)])].sort();
+  const mainVals = allKeys.map(k=>mainMap[k]||0);
+  const cogsVals = allKeys.map(k=>cogsMap[k]||0);
+  const labels = allKeys.map(k => period==='Monthly'&&k.length===7 ? k.slice(5) : k);
+
+  const mainLabel = isProfit ? 'Gross Profit' : 'Total Revenue';
+  const mainColor = isProfit ? COLORS.green : COLORS.blue;
+
+  document.getElementById('trend-title').textContent = `${mainLabel} & COGS by ${period}`;
+
+  destroyChart('trend');
+  const ctx = document.getElementById('chart-trend').getContext('2d');
+
+  const isDaily = period==='Daily';
+  const datasets = [
+    {
+      label: mainLabel, data: mainVals,
+      backgroundColor: mainColor+'cc', borderColor: mainColor,
+      type: isDaily?'line':'bar', fill: isDaily, tension: 0.3,
+      pointRadius: isDaily?3:0, borderWidth: isDaily?2:0,
+      order: 1,
+    },
+    {
+      label: 'Total COGS', data: cogsVals,
+      backgroundColor: COLORS.teal+'cc', borderColor: COLORS.teal,
+      type: isDaily?'line':'bar', fill: isDaily, tension: 0.3,
+      pointRadius: isDaily?3:0, borderWidth: isDaily?2:0,
+      order: 2,
+    }
+  ];
+
+  charts.trend = new Chart(ctx, {
+    type: isDaily?'line':'bar',
+    data: { labels, datasets },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: { legend:{ labels:{ font:{size:11,family:'DM Sans'}} } },
+      scales: {
+        y: { ticks: { callback: v=>fmt(v).replace('₹ ',''), font:{size:10} }, grid:{color:'#f0f0f0'} },
+        x: { ticks: { font:{size:9}, maxRotation:45 }, grid:{display:false} }
+      },
+      interaction: { mode:'index', intersect:false },
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// Product revenue (horizontal bar)
+// ═══════════════════════════════════════════════════════════
+function renderProducts(so, f) {
+  const prodMap = sumBy(so, r=>r.product_name||'Unknown', r=>r.total_sale||0);
+  const sorted = Object.entries(prodMap).sort((a,b)=>b[1]-a[1]).slice(0,15);
+
+  const labels = sorted.map(e => e[0].length>28 ? e[0].slice(0,28)+'…' : e[0]).reverse();
+  const values = sorted.map(e=>e[1]).reverse();
+  const colors = labels.map((_,i) => BLUES[i%BLUES.length]);
+
+  destroyChart('products');
+  charts.products = new Chart(document.getElementById('chart-products').getContext('2d'), {
+    type:'bar',
+    data: { labels, datasets:[{ data:values, backgroundColor:colors, borderRadius:3 }] },
+    options: {
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins: { legend:{display:false} },
+      scales: {
+        x: { ticks:{callback:v=>fmt(v).replace('₹ ',''),font:{size:9}}, grid:{color:'#f0f0f0'} },
+        y: { ticks:{font:{size:9}}, grid:{display:false} }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// Outstanding dues (horizontal bar)
+// ═══════════════════════════════════════════════════════════
+function renderOutstanding(custBal) {
+  const sorted = Object.entries(custBal).filter(e=>e[1]>0.005).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  if(!sorted.length) {
+    destroyChart('outstanding');
+    document.getElementById('chart-outstanding').parentElement.innerHTML = '<div class="empty-msg">No outstanding balances 🎉</div>';
+    return;
+  }
+  // Ensure canvas exists
+  const wrap = document.getElementById('chart-outstanding')?.parentElement;
+  if(!wrap.querySelector('canvas')) {
+    wrap.innerHTML = '<canvas id="chart-outstanding"></canvas>';
+  }
+
+  const labels = sorted.map(e=>e[0]).reverse();
+  const values = sorted.map(e=>e[1]).reverse();
+  const colors = values.map(v => v>10000?COLORS.orange:'#f0a500');
+
+  destroyChart('outstanding');
+  charts.outstanding = new Chart(document.getElementById('chart-outstanding').getContext('2d'), {
+    type:'bar',
+    data: { labels, datasets:[{ data:values, backgroundColor:colors, borderRadius:3 }] },
+    options: {
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins: { legend:{display:false} },
+      scales: {
+        x: { ticks:{callback:v=>fmt(v).replace('₹ ',''),font:{size:9}}, grid:{color:'#f0f0f0'} },
+        y: { ticks:{font:{size:9}}, grid:{display:false} }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// Low stock alerts
+// ═══════════════════════════════════════════════════════════
+function renderLowStock() {
+  const prods = (DATA.products||[]).filter(p => (p.current_stock||0) < (p.pack_size||1)*1);
+  const countEl = document.getElementById('low-stock-count');
+  const body = document.getElementById('low-stock-body');
+
+  if(!prods.length) {
+    countEl.textContent = ''; body.innerHTML = '<div class="empty-msg">✅ All products well stocked</div>';
+    return;
+  }
+  countEl.textContent = `${prods.length} product${prods.length!==1?'s':''} need attention`;
+  prods.sort((a,b)=>(a.current_stock||0)-(b.current_stock||0));
+
+  let html = '<table class="alert-table"><thead><tr><th>Product</th><th>Pack</th><th>Stock</th><th>Status</th></tr></thead><tbody>';
+  prods.forEach(p => {
+    const s=p.current_stock||0, ps=p.pack_size||1;
+    let status, dotColor;
+    if(s===0) { status='Out of stock'; dotColor=COLORS.red; }
+    else if(s<ps/2) { status='Critical'; dotColor=COLORS.orange; }
+    else { status='Low'; dotColor='#f0c500'; }
+    const name = p.product_name.length>35 ? p.product_name.slice(0,35)+'…' : p.product_name;
+    html += `<tr><td>${name}</td><td>${ps}</td><td>${s}</td><td><span class="status-dot" style="background:${dotColor}"></span>${status}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+// ── Auto-apply on filter change ──────────────────────────
+['f-period','f-metric','f-location','f-customer','f-product'].forEach(id => {
+  document.getElementById(id).addEventListener('change', applyFilters);
+});
+['f-from','f-to'].forEach(id => {
+  document.getElementById(id).addEventListener('change', applyFilters);
+});
+</script>
+</body>
+</html>
