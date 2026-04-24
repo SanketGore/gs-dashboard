@@ -71,8 +71,9 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .g-1{grid-template-columns:1fr;}
 .chart-card{background:var(--card);border:1px solid var(--border);border-radius:var(--card-r);padding:14px;box-shadow:var(--shadow);}
 .chart-title{font-size:12px;font-weight:700;color:var(--accent);margin-bottom:10px;}
-.chart-canvas-wrap{position:relative;width:100%;height:260px;}
-.chart-canvas-wrap canvas{position:absolute;top:0;left:0;width:100%!important;height:100%!important;}
+/* Chart.js standard: relative parent with height, canvas fills naturally */
+.chart-canvas-wrap{position:relative;width:100%;height:260px;overflow:hidden;}
+.chart-canvas-wrap canvas{display:block;}
 
 /* ── Alert table ── */
 .alert-card{background:#fff8f0;border:1px solid #f0a500;}
@@ -512,8 +513,12 @@ function renderTrend(so, invOnly, f){
   charts.trend=new Chart(c,{
     type:isDaily?'line':'bar',
     data:{labels,datasets:[
-      {label:mainLabel,data:mainVals,backgroundColor:mainColor+'bb',borderColor:mainColor,borderWidth:isDaily?2:0,fill:isDaily,tension:0.3,pointRadius:isDaily?3:0,order:1,type:isDaily?'line':'bar'},
-      {label:'COGS',data:cogsVals,backgroundColor:C.teal+'bb',borderColor:C.teal,borderWidth:isDaily?2:0,fill:isDaily,tension:0.3,pointRadius:isDaily?3:0,order:2,type:isDaily?'line':'bar'},
+      isDaily
+        ? {label:mainLabel,data:mainVals,borderColor:mainColor,backgroundColor:mainColor+'33',fill:true,tension:0.3,pointRadius:3,borderWidth:2.5,order:1}
+        : {label:mainLabel,data:mainVals,backgroundColor:mainColor+'cc',borderRadius:3,order:1},
+      isDaily
+        ? {label:'COGS',data:cogsVals,borderColor:C.teal,backgroundColor:C.teal+'33',fill:true,tension:0.3,pointRadius:3,borderWidth:2.5,order:2}
+        : {label:'COGS',data:cogsVals,backgroundColor:C.teal+'cc',borderRadius:3,order:2},
     ]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{labels:{font:{size:11}}}},
@@ -664,8 +669,8 @@ function renderRevExp(invOnly,exp,f){
   const labels=keys.map(k=>period==='Monthly'&&k.length===7?k.slice(5):k);
   charts.revexp=new Chart(c,{type:'bar',
     data:{labels,datasets:[
-      {label:'Revenue',data:revVals,backgroundColor:C.blue+'bb',borderRadius:3,order:2},
-      {label:'Expenses',data:expVals,backgroundColor:C.red+'bb',borderRadius:3,order:1},
+      {label:'Revenue',data:revVals,backgroundColor:C.blue+'cc',borderRadius:3},
+      {label:'Expenses',data:expVals,backgroundColor:C.red+'cc',borderRadius:3},
     ]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{labels:{font:{size:11}}}},
