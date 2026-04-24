@@ -4,7 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>GS Agencies — Business Dashboard</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+// Fail-safe: if Chart is not defined after jsDelivr, try cdnjs
+if(typeof Chart === "undefined") {
+  var s=document.createElement("script");
+  s.src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js";
+  document.head.appendChild(s);
+}
+</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -140,6 +148,8 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 
   <!-- KPI row -->
   <div class="kpi-row fade-in" id="kpi-row"></div>
+  <!-- Debug banner — hidden until charts load, shows status if they fail -->
+  <div id="debug-bar" style="display:none;background:#fff3cd;border:1px solid #ffc107;padding:8px 16px;font-size:12px;color:#856404;margin:4px 16px;border-radius:4px;"></div>
 
   <!-- Tab bar -->
   <div class="tab-bar">
@@ -347,7 +357,10 @@ function loadFile(file){
 }
 function loadCached(){
   const raw=localStorage.getItem('gs_dashboard_data');
-  if(raw){try{DATA=JSON.parse(raw);initDashboard();}catch(e){localStorage.removeItem('gs_dashboard_data');}}
+  if(raw){try{DATA=JSON.parse(raw);initDashboard();}catch(e){
+    localStorage.removeItem('gs_dashboard_data');
+    alert('Cached data was corrupted and has been cleared. Please upload the JSON file again.');
+  }}
 }
 function showUpload(){
   document.getElementById('dashboard').style.display='none';
@@ -378,7 +391,28 @@ function initDashboard(){
     const d=new Date(last); d.setMonth(d.getMonth()-3);
     document.getElementById('f-from').value=d.toISOString().split('T')[0];
   }
-  applyFilters();
+  // KEY FIX: defer chart rendering until AFTER the browser has reflowed
+  // the layout. Setting display:block above does not immediately cause a
+  // reflow — Chart.js would measure 0px container height without this.
+  // Double requestAnimationFrame guarantees at least one full paint cycle.
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    // Validate Chart.js loaded
+    const dbg=document.getElementById('debug-bar');
+    if(typeof Chart==='undefined'){
+      dbg.style.display='block';
+      dbg.textContent='⚠️ Chart.js failed to load. Charts cannot render. Check your internet connection and reload.';
+      return;
+    }
+    // Show data summary
+    const so=DATA.stock_out||[], ss=DATA.sales_summary||[], pr=DATA.products||[];
+    dbg.style.display='block';
+    dbg.textContent='✅ Data loaded — '
+      +so.length+' sales lines | '
+      +ss.length+' invoices | '
+      +pr.length+' products | '
+      +'exported: '+(DATA.exported_at||'unknown');
+    applyFilters();
+  }));
 }
 
 function populateFilters(){
