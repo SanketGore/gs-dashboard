@@ -163,9 +163,61 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 }
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
 .fade-in{animation:fadeUp .35s ease-out both;}
+
+/* ── Login screen ─────────────────────────────────────────── */
+#login-screen{display:none;flex-direction:column;align-items:center;
+  justify-content:center;min-height:100vh;padding:24px;background:var(--bg);}
+.login-card{background:var(--card);border:1px solid var(--border);
+  border-radius:16px;padding:40px 36px;max-width:400px;width:100%;
+  box-shadow:0 8px 32px rgba(0,0,0,0.10);text-align:center;}
+.login-logo{font-size:48px;margin-bottom:8px;}
+.login-title{font-size:22px;font-weight:700;color:var(--accent);margin-bottom:4px;}
+.login-sub{font-size:13px;color:var(--dim);margin-bottom:28px;}
+.login-field{width:100%;padding:11px 14px;font-size:14px;font-family:inherit;
+  border:1px solid var(--border);border-radius:6px;background:#fafafa;
+  color:var(--text);outline:none;transition:border .2s;margin-bottom:14px;}
+.login-field:focus{border-color:var(--blue);background:#fff;}
+.login-submit{width:100%;padding:12px;font-size:15px;font-weight:700;
+  background:var(--blue);color:#fff;border:none;border-radius:6px;
+  cursor:pointer;transition:background .15s;margin-bottom:14px;}
+.login-submit:hover{background:#2471a3;}
+.login-submit:disabled{background:#aaa;cursor:not-allowed;}
+.login-remember{display:flex;align-items:center;gap:8px;font-size:12px;
+  color:var(--dim);cursor:pointer;justify-content:center;margin-bottom:10px;}
+.login-remember input{width:15px;height:15px;cursor:pointer;accent-color:var(--blue);}
+.login-error{color:var(--red);font-size:12px;font-weight:600;min-height:18px;
+  margin-bottom:4px;}
+.login-spinner{display:none;font-size:12px;color:var(--dim);}
+.forgot-note{font-size:11px;color:var(--dim);margin-top:12px;line-height:1.5;}
+@media(max-width:480px){.login-card{padding:28px 20px;}}
 </style>
 </head>
 <body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">🔐</div>
+    <div class="login-title">GS Agencies</div>
+    <div class="login-sub">Business Dashboard — Authorised Access Only</div>
+    <div class="login-error" id="login-error"></div>
+    <input type="password" id="login-pwd" class="login-field"
+      placeholder="Enter password" autocomplete="current-password"
+      onkeydown="if(event.key==='Enter')submitLogin()">
+    <button class="login-submit" id="login-btn" onclick="submitLogin()">
+      Unlock Dashboard
+    </button>
+    <label class="login-remember">
+      <input type="checkbox" id="remember-device" checked>
+      Remember this device for 30 days
+    </label>
+    <div class="login-spinner" id="login-spinner">🔄 Verifying…</div>
+    <div class="forgot-note">
+      Password set by the account administrator.<br>
+      Contact them to reset access.
+    </div>
+  </div>
+</div>
 
 <!-- UPLOAD SCREEN -->
 <div id="upload-screen">
@@ -340,6 +392,118 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 <script>
 'use strict';
 let DATA = null;
+
+// ══════════════════════════════════════════════
+// Authentication
+// ══════════════════════════════════════════════
+
+const AUTH_KEY     = 'gs_auth_token';     // localStorage key for remember-me
+const AUTH_EXPIRY  = 'gs_auth_expiry';    // localStorage key for expiry timestamp
+const REMEMBER_DAYS = 30;                 // days before re-login required
+const AUTH_URL     = './auth.json';       // fetched from same GitHub repo
+
+async function sha256(str){
+  const buf = await crypto.subtle.digest(
+    'SHA-256', new TextEncoder().encode(str)
+  );
+  return Array.from(new Uint8Array(buf))
+    .map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+async function loadStoredHash(){
+  try{
+    const r=await fetch(AUTH_URL+'?_='+Date.now());
+    if(!r.ok) return null;
+    const j=await r.json();
+    return j.password_sha256||null;
+  }catch(e){ return null; }
+}
+
+function isRemembered(){
+  const token=localStorage.getItem(AUTH_KEY);
+  const expiry=parseInt(localStorage.getItem(AUTH_EXPIRY)||'0',10);
+  return token==='gs_authenticated' && Date.now()<expiry;
+}
+
+function rememberDevice(){
+  localStorage.setItem(AUTH_KEY,'gs_authenticated');
+  localStorage.setItem(AUTH_EXPIRY,
+    String(Date.now()+REMEMBER_DAYS*24*60*60*1000));
+}
+
+function forgetDevice(){
+  localStorage.removeItem(AUTH_KEY);
+  localStorage.removeItem(AUTH_EXPIRY);
+}
+
+async function submitLogin(){
+  const pwd=document.getElementById('login-pwd').value;
+  if(!pwd){
+    document.getElementById('login-error').textContent='Please enter a password.';
+    return;
+  }
+  const btn=document.getElementById('login-btn');
+  const spin=document.getElementById('login-spinner');
+  btn.disabled=true; spin.style.display='block';
+  document.getElementById('login-error').textContent='';
+
+  const storedHash=await loadStoredHash();
+  if(!storedHash){
+    document.getElementById('login-error').textContent=
+      '⚠️ Auth file not found on GitHub. Contact the administrator.';
+    btn.disabled=false; spin.style.display='none';
+    return;
+  }
+
+  const entered=await sha256(pwd);
+  if(entered===storedHash){
+    if(document.getElementById('remember-device').checked) rememberDevice();
+    showDashboardAfterLogin();
+  }else{
+    document.getElementById('login-error').textContent=
+      '❌ Incorrect password. Try again.';
+    document.getElementById('login-pwd').value='';
+    document.getElementById('login-pwd').focus();
+    btn.disabled=false; spin.style.display='none';
+  }
+}
+
+function showDashboardAfterLogin(){
+  document.getElementById('login-screen').style.display='none';
+  // Now load the data normally
+  startApp();
+}
+
+async function startApp(){
+  // Try auto-fetch from GitHub repo
+  try{
+    const res=await fetch('./dashboard_data.json?_='+Date.now());
+    if(res.ok){
+      const text=await res.text();
+      DATA=JSON.parse(text);
+      try{localStorage.setItem('gs_dashboard_data',text);}catch(e){}
+      initDashboard(); return;
+    }
+  }catch(e){}
+  // Fall back to cached data
+  const raw=localStorage.getItem('gs_dashboard_data');
+  if(raw) document.getElementById('cached-msg').style.display='block';
+  document.getElementById('upload-screen').style.display='flex';
+}
+
+// Entry point — runs on every page load
+window.addEventListener('DOMContentLoaded', ()=>{
+  if(isRemembered()){
+    // Remembered device — skip login, go straight to data
+    startApp();
+  }else{
+    // Show login screen
+    document.getElementById('login-screen').style.display='flex';
+    setTimeout(()=>document.getElementById('login-pwd').focus(),100);
+  }
+});
+
+
 let charts = {};
 let activeTab = 'overview';
 
@@ -437,13 +601,7 @@ function showUpload(){
   document.getElementById('upload-screen').style.display='flex';
 }
 
-window.addEventListener('DOMContentLoaded', async ()=>{
-  try{
-    const res=await fetch('./dashboard_data.json?_='+Date.now());
-    if(res.ok){const text=await res.text();DATA=JSON.parse(text);try{localStorage.setItem('gs_dashboard_data',text);}catch(e){}initDashboard();return;}
-  }catch(e){}
-  if(localStorage.getItem('gs_dashboard_data')) document.getElementById('cached-msg').style.display='block';
-});
+// DOMContentLoaded is now handled by the auth module above
 
 // ══════════════════════════════════════════════
 // Init
