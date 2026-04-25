@@ -723,50 +723,51 @@ function initDashboard(){
 // ══════════════════════════════════════════════
 
 // State: { location: Set of selected values, customer: Set }
-const _cdState = { location: new Set(), customer: new Set() };
-// Full item lists
-const _cdItems  = { location: [], customer: [] };
-// _cdNone: true = user explicitly deselected all (show nothing)
-const _cdNone   = { location: false, customer: false };
+// _cdAll[id]=true → all items selected (no filter applied)
+// _cdSel[id]=Set  → explicit selections when not in "all" mode
+// _cdItems[id]    → full ordered item list
+const _cdAll  = { location: true,  customer: true  };
+const _cdSel  = { location: new Set(), customer: new Set() };
+const _cdItems = { location: [], customer: [] };
 
 function _buildCDList(id){
   const list = document.getElementById('cd-'+id+'-list');
   const items = _cdItems[id];
-  const sel   = _cdState[id];
-  list.innerHTML = items.map(v=>`
-    <label class="cd-item">
-      <input type="checkbox" value="${v.replace(/"/g,'&quot;')}"
-        ${!_cdNone[id]&&(sel.size===0||sel.has(v))?'checked':''}>
+  list.innerHTML = items.map(v=>{
+    const chk=_cdAll[id]||_cdSel[id].has(v);
+    return `<label class="cd-item">
+      <input type="checkbox" value="${v.replace(/"/g,'&quot;')}" ${chk?'checked':''}>
       <span>${v}</span>
-    </label>`).join('');
+    </label>`;
+  }).join('');
   list.querySelectorAll('input').forEach(cb=>{
     cb.addEventListener('change', ()=>_onCDChange(id, cb.value, cb.checked));
   });
 }
 
 function _onCDChange(id, value, checked){
-  const sel = _cdState[id];
-  _cdNone[id] = false;  // user is making a selection
-  // If currently "all selected" (empty set = all), materialise the full set first
-  if(sel.size === 0) _cdItems[id].forEach(v=>sel.add(v));
-  if(checked) sel.add(value); else sel.delete(value);
-  // If all items are now selected, collapse back to "all" (empty = all)
-  if(sel.size === _cdItems[id].length){ sel.clear(); _cdNone[id]=false; }
+  if(_cdAll[id]){
+    // First change from "all" mode: materialise full set then apply change
+    _cdAll[id]=false;
+    _cdItems[id].forEach(v=>_cdSel[id].add(v));
+  }
+  if(checked) _cdSel[id].add(value);
+  else        _cdSel[id].delete(value);
+  // If every item is now checked again → restore "all" mode
+  if(_cdSel[id].size===_cdItems[id].length){ _cdAll[id]=true; _cdSel[id].clear(); }
   _updateCDLabel(id);
-  if(id==='location') _refreshCustomerList(); // cascade
+  if(id==='location') _refreshCustomerList();
   applyFilters();
 }
 
 function _updateCDLabel(id){
-  const sel  = _cdState[id];
-  const n    = sel.size;
-  const icon = id==='location'?'📍':'👤';
-  const noun = id==='location'?'Location':'Customer';
+  const icon=id==='location'?'📍':'👤';
+  const noun=id==='location'?'Location':'Customer';
   let txt;
-  if(_cdNone[id])          txt=icon+' None';
-  else if(n===0)           txt=icon+' All '+noun+'s';
-  else if(n===1)           txt=icon+' '+[...sel][0];
-  else                     txt=icon+' '+n+' '+noun+'s';
+  if(_cdAll[id])                txt=icon+' All '+noun+'s';
+  else if(_cdSel[id].size===0)  txt=icon+' None selected';
+  else if(_cdSel[id].size===1)  txt=icon+' '+[..._cdSel[id]][0];
+  else                          txt=icon+' '+_cdSel[id].size+' '+noun+'s';
   document.getElementById('cd-'+id+'-lbl').textContent=txt;
 }
 
@@ -795,22 +796,15 @@ function searchCD(id, q){
 }
 
 function selectAllCD(id){
-  _cdState[id].clear();  // empty = all selected
-  _cdNone[id]=false;
-  _buildCDList(id);
-  _updateCDLabel(id);
+  _cdAll[id]=true; _cdSel[id].clear();
+  _buildCDList(id); _updateCDLabel(id);
   if(id==='location') _refreshCustomerList();
   applyFilters();
 }
 
 function clearAllCD(id){
-  // Deselect all — set full + _cdNone flag so checkboxes render unchecked
-  const sel=_cdState[id];
-  sel.clear();
-  _cdItems[id].forEach(v=>sel.add(v));
-  _cdNone[id]=true;
-  _buildCDList(id);
-  _updateCDLabel(id);
+  _cdAll[id]=false; _cdSel[id].clear();
+  _buildCDList(id); _updateCDLabel(id);
   if(id==='location') _refreshCustomerList();
   applyFilters();
 }
@@ -831,35 +825,28 @@ document.addEventListener('click', e=>{
 // ══════════════════════════════════════════════
 
 function populateFilters(){
-  // Build location list from customer master
   const locs=[...new Set((DATA.customers||[]).map(c=>c.location||'Unknown'))].sort();
-  _cdItems.location=locs;
-  _cdState.location.clear();  // all selected
-  _buildCDList('location');
-  _updateCDLabel('location');
-  _refreshCustomerList();      // build customer list (all locations = all customers)
+  _cdItems.location=locs; _cdAll.location=true; _cdSel.location.clear();
+  _buildCDList('location'); _updateCDLabel('location');
+  _refreshCustomerList();
 }
 
 function _refreshCustomerList(){
-  const locSel=_cdState.location;
-  const cl=getCustLocMap();
-  // Get customers in selected locations (or all if nothing restricted)
   let custs;
-  if(locSel.size===0){
-    // All locations
+  if(_cdAll.location){
     custs=[...new Set((DATA.customers||[]).map(c=>c.customer_name))].sort();
+  } else if(_cdSel.location.size===0){
+    custs=[];
   } else {
     custs=[...new Set(
       (DATA.customers||[])
-        .filter(c=>locSel.has(c.location||'Unknown'))
+        .filter(c=>_cdSel.location.has(c.location||'Unknown'))
         .map(c=>c.customer_name)
     )].sort();
   }
   _cdItems.customer=custs;
-  // Reset customer selection when locations change
-  _cdState.customer.clear();
-  _buildCDList('customer');
-  _updateCDLabel('customer');
+  _cdAll.customer=true; _cdSel.customer.clear();
+  _buildCDList('customer'); _updateCDLabel('customer');
 }
 
 function getFilters(){
@@ -868,8 +855,8 @@ function getFilters(){
     to:document.getElementById('f-to').value,
     period:document.getElementById('f-period').value,
     metric:document.getElementById('f-metric').value,
-    locations:_cdState.location,   // Set (empty = all)
-    customers:_cdState.customer,   // Set (empty = all)
+    allLoc:_cdAll.location, selLoc:_cdSel.location,
+    allCust:_cdAll.customer, selCust:_cdSel.customer,
   };
 }
 
@@ -878,12 +865,14 @@ function getCustLocMap(){
 }
 
 function _matchesLocCust(customerName, f){
-  const cl=getCustLocMap();
-  // _cdNone means user deselected all — show nothing
-  if(_cdNone.location) return false;
-  if(_cdNone.customer) return false;
-  if(f.locations.size>0 && !f.locations.has(cl[customerName]||'Unknown')) return false;
-  if(f.customers.size>0 && !f.customers.has(customerName)) return false;
+  if(!f.allLoc){
+    if(f.selLoc.size===0) return false;
+    if(!f.selLoc.has(getCustLocMap()[customerName]||'Unknown')) return false;
+  }
+  if(!f.allCust){
+    if(f.selCust.size===0) return false;
+    if(!f.selCust.has(customerName)) return false;
+  }
   return true;
 }
 
