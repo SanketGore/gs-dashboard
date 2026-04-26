@@ -1494,9 +1494,26 @@ function renderLedger(){
       ${netBalance>0.01?'⏳ Outstanding':'✅ Settled'}: ${fmtFull(Math.abs(netBalance))}
     </div>`;
 
-  // Pending invoices (balance_due > 0)
-  const pendInv = invRows
-    .filter(r=>(+r.balance_due||0)>0.01)
+  // Compute true balance per invoice by netting PAY- rows against INV rows.
+  // Static balance_due on INV rows may be stale from the import;
+  // PAY- rows carry negative balance_due that cancels the original balance.
+  const allCustRows=(DATA.sales_summary||[]).filter(r=>r.customer_name===cust);
+  const netBalMap={};
+  allCustRows.forEach(r=>{
+    const isPay=String(r.reference_invoice_id||'').startsWith('PAY-');
+    if(!isPay){
+      netBalMap[r.reference_invoice_id]=
+        (netBalMap[r.reference_invoice_id]||0)+(+r.balance_due||0);
+    } else {
+      const ref=r.reference_invoice;
+      if(ref) netBalMap[ref]=(netBalMap[ref]||0)+(+r.balance_due||0);
+    }
+  });
+
+  // Pending = invoices where net true balance > 0
+  const pendInv=invRows
+    .map(r=>({...r, trueDue:netBalMap[r.reference_invoice_id]||0}))
+    .filter(r=>r.trueDue>0.01)
     .sort((a,b)=>(a.sale_date||'').localeCompare(b.sale_date||''));
 
   if(!pendInv.length){
@@ -1512,7 +1529,7 @@ function renderLedger(){
         <td style="font-size:10px">${r.reference_invoice_id||'—'}</td>
         <td>${r.physical_invoice_no||'—'}</td>
         <td>${fmtFull(+r.total_bill||0)}</td>
-        <td class="due">${fmtFull(+r.balance_due||0)}</td>
+        <td class="due">${fmtFull(r.trueDue)}</td>
       </tr>`;
     });
     html+='</tbody></table>';
