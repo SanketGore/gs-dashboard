@@ -225,6 +225,46 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
   .cd-btn{width:100%;justify-content:space-between;}
   .cd-panel{min-width:100%;max-width:100%;}
 }
+
+/* ── Ledger tables ─────────────────────────────────────────── */
+.ledger-table{width:100%;border-collapse:collapse;font-size:11px;}
+.ledger-table th{background:var(--accent);color:#fff;padding:6px 10px;text-align:left;font-size:10px;font-weight:600;}
+.ledger-table td{padding:5px 10px;border-bottom:1px solid var(--border);}
+.ledger-table tr:nth-child(even){background:var(--bg);}
+.ledger-table tr.pay-row td{background:#e8f5e9;color:#1b5e20;}
+.ledger-table tr.inv-row td{background:#fff;}
+.ledger-table .due{color:var(--red);font-weight:700;}
+.ledger-table .paid{color:var(--green);font-weight:700;}
+.ledger-select-wrap{margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.ledger-select{padding:6px 10px;font-size:12px;font-family:inherit;border:1px solid var(--border);
+  border-radius:4px;background:var(--card);color:var(--text);min-width:200px;}
+.summary-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.chip{padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;}
+.chip-red{background:#fde8e8;color:var(--red);}
+.chip-green{background:#e8f5e9;color:var(--green);}
+.chip-blue{background:#eaf4fb;color:var(--blue);}
+
+/* ── Restock calculator ────────────────────────────────────── */
+.calc-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:14px;}
+.calc-field label{display:block;font-size:10px;font-weight:700;color:var(--dim);
+  text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;}
+.calc-field input{width:100%;padding:8px 10px;font-size:13px;font-family:inherit;
+  border:1px solid var(--border);border-radius:5px;background:#fafafa;color:var(--text);}
+.calc-field input:focus{outline:none;border-color:var(--blue);background:#fff;}
+.calc-run{padding:9px 24px;font-size:13px;font-weight:700;background:var(--blue);
+  color:#fff;border:none;border-radius:5px;cursor:pointer;transition:background .15s;margin-bottom:14px;}
+.calc-run:hover{background:#2471a3;}
+.calc-note{font-size:11px;color:var(--dim);margin-bottom:12px;line-height:1.6;
+  padding:8px 12px;background:#f8f9fa;border-radius:4px;border-left:3px solid var(--blue);}
+.restock-table{width:100%;border-collapse:collapse;font-size:12px;}
+.restock-table th{background:var(--accent);color:#fff;padding:7px 10px;text-align:left;font-size:11px;}
+.restock-table td{padding:6px 10px;border-bottom:1px solid var(--border);}
+.restock-table tr:nth-child(even){background:var(--bg);}
+.restock-table .qty-cell{font-weight:700;color:var(--blue);}
+.restock-table .cost-cell{color:var(--green);font-weight:600;}
+.restock-total{margin-top:10px;padding:10px 14px;background:#eaf4fb;border-radius:5px;
+  font-size:13px;font-weight:600;color:var(--accent);}
+@media(max-width:700px){.calc-form{grid-template-columns:1fr 1fr;}}
 </style>
 </head>
 <body>
@@ -419,11 +459,42 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
       <div class="chart-grid g-2 fade-in">
         <div class="chart-card">
           <div class="chart-title">Outstanding by Customer (Top 20)</div>
-          <div class="chart-canvas-wrap" style="height:380px;"><canvas id="chart-outstanding"></canvas></div>
+          <div class="chart-canvas-wrap" style="height:340px;"><canvas id="chart-outstanding"></canvas></div>
         </div>
         <div class="chart-card">
           <div class="chart-title">Receivables Ageing (0–30 | 31–60 | 60+ days)</div>
-          <div class="chart-canvas-wrap" style="height:380px;"><canvas id="chart-ageing"></canvas></div>
+          <div class="chart-canvas-wrap" style="height:340px;"><canvas id="chart-ageing"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Customer Ledger section -->
+      <div class="chart-card fade-in" style="margin-top:12px;">
+        <div class="chart-title" style="margin-bottom:10px;">📋 Customer Ledger</div>
+        <div class="ledger-select-wrap">
+          <label style="font-size:12px;font-weight:600;color:var(--dim);">Select Customer:</label>
+          <select class="ledger-select" id="ledger-customer"
+            onchange="renderLedger()">
+            <option value="">— choose a customer —</option>
+          </select>
+        </div>
+        <div id="ledger-summary" class="summary-chips"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" id="ledger-tables-wrap">
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px;">
+              🧾 Pending Invoices
+            </div>
+            <div id="ledger-invoices" style="overflow-y:auto;max-height:280px;">
+              <div class="empty-msg">Select a customer to view invoices</div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px;">
+              💳 Payment History
+            </div>
+            <div id="ledger-payments" style="overflow-y:auto;max-height:280px;">
+              <div class="empty-msg">Select a customer to view payments</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -448,6 +519,36 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
           <div class="chart-title">3-Month Moving Average</div>
           <div class="chart-canvas-wrap" style="height:280px;"><canvas id="chart-moving-avg"></canvas></div>
         </div>
+      </div>
+
+      <!-- Restock Calculator -->
+      <div class="chart-card fade-in" style="margin-top:12px;">
+        <div class="chart-title" style="margin-bottom:6px;">🧮 Restock Order Calculator</div>
+        <p class="calc-note">
+          Enter your parameters below. The calculator looks at actual sales velocity over the
+          lookback period, adds a safety buffer, and proposes box quantities for each product
+          within your budget.
+        </p>
+        <div class="calc-form">
+          <div class="calc-field">
+            <label>Lookback Period (days)</label>
+            <input type="number" id="calc-lookback" value="30" min="7" max="365">
+          </div>
+          <div class="calc-field">
+            <label>Forecast Period (days)</label>
+            <input type="number" id="calc-forecast-days" value="30" min="7" max="180">
+          </div>
+          <div class="calc-field">
+            <label>Safety Buffer (%)</label>
+            <input type="number" id="calc-buffer" value="15" min="0" max="100">
+          </div>
+          <div class="calc-field">
+            <label>Available Budget (₹)</label>
+            <input type="number" id="calc-budget" value="100000" min="0">
+          </div>
+        </div>
+        <button class="calc-run" onclick="runRestockCalc()">▶  Calculate Restock Order</button>
+        <div id="restock-result"></div>
       </div>
     </div>
   </div>
@@ -949,6 +1050,7 @@ function renderTab(id){
   } else if(id==='receivables'){
     safeRender(()=>renderOutstanding(custBal),'outstanding');
     safeRender(()=>renderAgeing(ss),'ageing');
+    safeRender(()=>populateLedgerDropdown(),'ledger-dropdown');
   } else if(id==='forecast'){
     safeRender(()=>renderForecast(invOnly,f),'forecast');
   }
@@ -1340,6 +1442,229 @@ function renderForecast(invOnly,f){
   const el=document.getElementById(id);
   if(el) el.addEventListener('change',applyFilters);
 });
+
+// ══════════════════════════════════════════════
+// RECEIVABLES: Customer Ledger
+// ══════════════════════════════════════════════
+
+function populateLedgerDropdown(){
+  const sel = document.getElementById('ledger-customer');
+  const f   = getFilters();
+  // Build customer list from sales_summary (customers who have transactions)
+  const custs = [...new Set(
+    (DATA.sales_summary||[])
+      .filter(r=>_matchesLocCust(r.customer_name, f))
+      .map(r=>r.customer_name)
+  )].sort();
+
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— choose a customer —</option>';
+  custs.forEach(c=>{
+    const o=document.createElement('option');
+    o.value=o.textContent=c;
+    if(c===current) o.selected=true;
+    sel.appendChild(o);
+  });
+  // Re-render if a customer is still selected
+  if(sel.value) renderLedger();
+  else {
+    document.getElementById('ledger-invoices').innerHTML='<div class="empty-msg">Select a customer to view invoices</div>';
+    document.getElementById('ledger-payments').innerHTML='<div class="empty-msg">Select a customer to view payments</div>';
+    document.getElementById('ledger-summary').innerHTML='';
+  }
+}
+
+function renderLedger(){
+  const cust = document.getElementById('ledger-customer').value;
+  if(!cust) return;
+
+  const allRows = (DATA.sales_summary||[]).filter(r=>r.customer_name===cust);
+  const invRows = allRows.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-'));
+  const payRows = allRows.filter(r=> String(r.reference_invoice_id||'').startsWith('PAY-'));
+
+  const totalBilled   = invRows.reduce((s,r)=>s+(+r.total_bill||0),0);
+  const totalReceived = allRows.reduce((s,r)=>s+(+r.total_received||0),0);
+  const netBalance    = allRows.reduce((s,r)=>s+(+r.balance_due||0),0);
+
+  // Summary chips
+  document.getElementById('ledger-summary').innerHTML=`
+    <div class="chip chip-blue">🧾 ${invRows.length} invoices | Billed: ${fmtFull(totalBilled)}</div>
+    <div class="chip chip-green">💳 Received: ${fmtFull(totalReceived)}</div>
+    <div class="chip ${netBalance>0.01?'chip-red':'chip-green'}">
+      ${netBalance>0.01?'⏳ Outstanding':'✅ Settled'}: ${fmtFull(Math.abs(netBalance))}
+    </div>`;
+
+  // Pending invoices (balance_due > 0)
+  const pendInv = invRows
+    .filter(r=>(+r.balance_due||0)>0.01)
+    .sort((a,b)=>(a.sale_date||'').localeCompare(b.sale_date||''));
+
+  if(!pendInv.length){
+    document.getElementById('ledger-invoices').innerHTML=
+      '<div class="empty-msg">✅ No pending invoices</div>';
+  } else {
+    let html='<table class="ledger-table"><thead><tr>'
+      +'<th>Date</th><th>Invoice</th><th>Phys#</th><th>Billed</th><th>Due</th>'
+      +'</tr></thead><tbody>';
+    pendInv.forEach(r=>{
+      html+=`<tr class="inv-row">
+        <td>${r.sale_date||'—'}</td>
+        <td style="font-size:10px">${r.reference_invoice_id||'—'}</td>
+        <td>${r.physical_invoice_no||'—'}</td>
+        <td>${fmtFull(+r.total_bill||0)}</td>
+        <td class="due">${fmtFull(+r.balance_due||0)}</td>
+      </tr>`;
+    });
+    html+='</tbody></table>';
+    document.getElementById('ledger-invoices').innerHTML=html;
+  }
+
+  // Payment history (PAY- rows), newest first
+  const payments = payRows.sort((a,b)=>(b.sale_date||'').localeCompare(a.sale_date||''));
+
+  if(!payments.length){
+    document.getElementById('ledger-payments').innerHTML=
+      '<div class="empty-msg">No payments recorded</div>';
+  } else {
+    let html='<table class="ledger-table"><thead><tr>'
+      +'<th>Date</th><th>Payment ID</th><th>Cash</th><th>UPI</th><th>Disc</th><th>Total</th>'
+      +'</tr></thead><tbody>';
+    payments.forEach(r=>{
+      const total=(+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0);
+      html+=`<tr class="pay-row">
+        <td>${r.sale_date||'—'}</td>
+        <td style="font-size:10px">${r.reference_invoice_id||'—'}</td>
+        <td>${fmtFull(+r.cash_received||0)}</td>
+        <td>${fmtFull(+r.upi_received||0)}</td>
+        <td>${fmtFull(+r.discount_amount||0)}</td>
+        <td class="paid">${fmtFull(total)}</td>
+      </tr>`;
+    });
+    html+='</tbody></table>';
+    document.getElementById('ledger-payments').innerHTML=html;
+  }
+}
+
+// ══════════════════════════════════════════════
+// FORECAST: Restock Calculator
+// ══════════════════════════════════════════════
+
+function runRestockCalc(){
+  const lookbackDays  = Math.max(1, +document.getElementById('calc-lookback').value||30);
+  const forecastDays  = Math.max(1, +document.getElementById('calc-forecast-days').value||30);
+  const bufferPct     = Math.max(0, +document.getElementById('calc-buffer').value||15) / 100;
+  const budget        = Math.max(0, +document.getElementById('calc-budget').value||0);
+
+  // Lookback window
+  const allSO = DATA.stock_out||[];
+  const today = new Date();
+  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate()-lookbackDays);
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+
+  // Filter stock_out to lookback window
+  const windowSO = allSO.filter(r=>r.sale_date && r.sale_date>=cutoffStr);
+
+  // Aggregate units sold per product in the window
+  const soldMap={};   // product_id → units sold
+  const nameMap={};   // product_id → product_name
+  windowSO.forEach(r=>{
+    soldMap[r.product_id]=(soldMap[r.product_id]||0)+(+r.quantity||0);
+    nameMap[r.product_id]=r.product_name;
+  });
+
+  // Get product master for pack_size and pack_cost
+  const prods = DATA.products||[];
+  const prodMap={};
+  prods.forEach(p=>{ prodMap[p.product_id]=p; });
+
+  // Build restock list
+  // Projected need = (sold/lookbackDays) * forecastDays * (1 + buffer)
+  // minus current stock, converted to boxes (round up)
+  const lines = [];
+  Object.keys(soldMap).forEach(pid=>{
+    const p = prodMap[pid];
+    if(!p) return;
+    const dailyRate  = soldMap[pid] / lookbackDays;
+    const projected  = dailyRate * forecastDays * (1 + bufferPct);
+    const current    = +p.current_stock||0;
+    const needed     = Math.max(0, projected - current);
+    const boxSize    = +p.pack_size||1;
+    const boxes      = Math.ceil(needed / boxSize);
+    if(boxes <= 0) return;
+    const packCost   = +p.pack_cost||0;
+    const lineCost   = boxes * packCost;
+    lines.push({
+      pid, name:p.product_name||nameMap[pid],
+      dailyRate, projected:Math.round(projected),
+      current, needed:Math.round(needed),
+      boxSize, boxes, packCost, lineCost
+    });
+  });
+
+  // Sort by line cost descending
+  lines.sort((a,b)=>b.lineCost-a.lineCost);
+
+  // Budget allocation — greedy: include items until budget exhausted
+  let remaining = budget;
+  let totalBoxes = 0, totalCost = 0;
+  const final = [];
+  lines.forEach(l=>{
+    if(remaining <= 0){ final.push({...l, boxes:0, lineCost:0, skipped:true}); return; }
+    const affordable = budget>0 ? Math.min(l.boxes, Math.floor(remaining/l.packCost)) : l.boxes;
+    if(affordable <= 0){ final.push({...l, boxes:0, lineCost:0, skipped:true}); return; }
+    const cost = affordable * l.packCost;
+    remaining -= cost; totalCost += cost; totalBoxes += affordable;
+    final.push({...l, boxes:affordable, lineCost:cost, skipped:false});
+  });
+  // Include skipped rows at bottom for visibility
+  const shown  = final.filter(l=>!l.skipped);
+  const skipped= final.filter(l=> l.skipped);
+  const allRows= [...shown,...skipped];
+
+  if(!allRows.length){
+    document.getElementById('restock-result').innerHTML=
+      '<div class="empty-msg">No sales data found in the lookback window. '
+      +'Try increasing the lookback period.</div>';
+    return;
+  }
+
+  let html='<table class="restock-table"><thead><tr>'
+    +'<th>Product</th><th>Pack</th><th>Daily Rate</th>'
+    +'<th>Projected Need</th><th>Current Stock</th>'
+    +'<th>Boxes to Order</th><th>Cost/Box</th><th>Line Cost</th>'
+    +'</tr></thead><tbody>';
+
+  allRows.forEach(l=>{
+    const skip = l.skipped;
+    html+=`<tr style="${skip?'opacity:0.45;text-decoration:line-through;':''}">
+      <td>${l.name}</td>
+      <td>${l.boxSize}</td>
+      <td>${l.dailyRate.toFixed(1)}</td>
+      <td>${l.projected}</td>
+      <td>${l.current}</td>
+      <td class="qty-cell">${l.boxes}${skip?' (budget)':''}</td>
+      <td>${fmtFull(l.packCost)}</td>
+      <td class="cost-cell">${l.boxes>0?fmtFull(l.lineCost):'—'}</td>
+    </tr>`;
+  });
+  html+='</tbody></table>';
+
+  html+=`<div class="restock-total">
+    📦 ${totalBoxes} boxes across ${shown.length} product(s) &nbsp;|&nbsp;
+    💰 Total Cost: ${fmtFull(totalCost)}
+    ${budget>0?' &nbsp;|&nbsp; 💵 Budget remaining: '+fmtFull(Math.max(0,remaining)):''}
+  </div>`;
+
+  if(skipped.length){
+    html+=`<p class="calc-note" style="margin-top:8px;">
+      ⚠️ ${skipped.length} product(s) shown above (strikethrough) could not be fully
+      ordered within the budget. Increase the budget or reduce the forecast period to include them.
+    </p>`;
+  }
+
+  document.getElementById('restock-result').innerHTML=html;
+}
+
 </script>
 </body>
 </html>
