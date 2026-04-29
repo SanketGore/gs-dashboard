@@ -304,8 +304,10 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
     <div class="sub">or drag &amp; drop the file here</div>
   </div>
   <input type="file" id="file-input" accept=".json">
-  <div id="cached-msg" class="cached-banner" style="display:none" onclick="loadCached()">
-    📋 Previously loaded data available — click to use it
+  <div id="cached-msg" class="cached-banner" style="display:none">
+    <span onclick="loadCached()" style="cursor:pointer">📋 Cached data — click to use</span>
+    &nbsp;·&nbsp;
+    <span onclick="clearCacheAndReload()" style="cursor:pointer;color:#c0392b;font-weight:700">🔄 Fetch latest from GitHub</span>
   </div>
 </div>
 
@@ -358,6 +360,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
       </div>
       <button class="btn btn-blue btn-sm" onclick="applyFilters()">Apply</button>
       <button class="btn btn-outline btn-sm" onclick="showUpload()">📂 Data</button>
+      <button class="btn btn-outline btn-sm" onclick="clearCacheAndReload()" title="Fetch latest data from GitHub">🔄 Refresh</button>
     </div>
   </div>
 
@@ -643,21 +646,35 @@ function showDashboardAfterLogin(){
   startApp();
 }
 
+// Edit if your GitHub username or repo name changes
+const GITHUB_RAW = 'https://raw.githubusercontent.com/sanketgore/gs-dashboard/main/dashboard_data.json';
+
 async function startApp(){
-  // Try auto-fetch from GitHub repo
-  try{
-    const res=await fetch('./dashboard_data.json?_='+Date.now());
-    if(res.ok){
-      const text=await res.text();
-      DATA=JSON.parse(text);
-      try{localStorage.setItem('gs_dashboard_data',text);}catch(e){}
-      initDashboard(); return;
-    }
-  }catch(e){}
-  // Fall back to cached data
+  // Try raw.githubusercontent.com first — bypasses GitHub Pages CDN cache.
+  // Pages CDN can serve stale files for up to 10 min; raw.githubusercontent.com
+  // always returns the latest committed content immediately.
+  for(const url of [GITHUB_RAW+'?_='+Date.now(), './dashboard_data.json?_='+Date.now()]){
+    try{
+      const res=await fetch(url,{cache:'no-store'});
+      if(res.ok){
+        const text=await res.text();
+        DATA=JSON.parse(text);
+        try{localStorage.setItem('gs_dashboard_data',text);}catch(e){}
+        initDashboard(); return;
+      }
+    }catch(e){}
+  }
+  // Both failed — fall back to localStorage cache
   const raw=localStorage.getItem('gs_dashboard_data');
   if(raw) document.getElementById('cached-msg').style.display='block';
   document.getElementById('upload-screen').style.display='flex';
+}
+
+function clearCacheAndReload(){
+  localStorage.removeItem('gs_dashboard_data');
+  document.getElementById('upload-screen').style.display='none';
+  document.getElementById('cached-msg').style.display='none';
+  startApp();
 }
 
 // Entry point — runs on every page load
