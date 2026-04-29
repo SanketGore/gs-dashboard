@@ -1008,10 +1008,11 @@ function applyFilters(){
   const invOnly=ss.filter(r=>!(r.reference_invoice_id||'').startsWith('PAY-'));
   const revenue=invOnly.reduce((s,r)=>s+(+r.total_bill||0),0);
   const profit=so.reduce((s,r)=>s+((+r.total_sale||0)-(+r.buying_rate_at_time||0)),0);
-  // Outstanding — all time, filtered by location+customer selection only
+  // Outstanding — all-time, filtered by loc+customer, using true_pending formula
   const ssAll=(DATA.sales_summary||[]).filter(r=>_matchesLocCust(r.customer_name,f));
-  // custBal now built from tpMaps.byCustomer (see below)
-  const outstanding=Object.values(custBal).filter(v=>v>0.005).reduce((s,v)=>s+v,0);
+  const tpMaps=buildTruePendingMaps(ssAll);
+  const custBal=Object.fromEntries(tpMaps.byCustomer);
+  const outstanding=[...tpMaps.byCustomer.values()].filter(v=>v>0.005).reduce((s,v)=>s+v,0);
   const prods=DATA.products||[];
   const stockVal=prods.reduce((s,p)=>s+(+p.current_stock||0)*(+p.cost_price_unit||0),0);
   const si=(()=>{let r=DATA.stock_in||[];if(f.from)r=r.filter(x=>x.transaction_date>=f.from);if(f.to)r=r.filter(x=>x.transaction_date<=f.to);return r;})();
@@ -1026,13 +1027,10 @@ function applyFilters(){
     {icon:'🛒',label:'TOTAL PURCHASES',value:fmt(purchases),color:C.navy},
   ]);
 
-  // ssAllTime: no date filter — for receivables charts that show all-time outstanding
-  const ssAllTime=(DATA.sales_summary||[]).filter(r=>_matchesLocCust(r.customer_name,f));
-
-  // Store for tab renders
+  // Store for tab renders (ssAll = all-time loc+cust filtered, no date filter)
   window._f=f; window._so=so; window._ss=ss; window._invOnly=invOnly;
-  window._custBal=custBal; window._exp=filterExp(f);
-  window._ssAllTime=ssAllTime;
+  window._custBal=custBal; window._tpMaps=tpMaps;
+  window._ssAllTime=ssAll; window._exp=filterExp(f);
   renderTab(activeTab);
 }
 
