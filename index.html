@@ -1026,9 +1026,13 @@ function applyFilters(){
     {icon:'🛒',label:'TOTAL PURCHASES',value:fmt(purchases),color:C.navy},
   ]);
 
+  // ssAllTime: no date filter — for receivables charts that show all-time outstanding
+  const ssAllTime=(DATA.sales_summary||[]).filter(r=>_matchesLocCust(r.customer_name,f));
+
   // Store for tab renders
   window._f=f; window._so=so; window._ss=ss; window._invOnly=invOnly;
   window._custBal=custBal; window._exp=filterExp(f);
+  window._ssAllTime=ssAllTime;
   renderTab(activeTab);
 }
 
@@ -1041,15 +1045,16 @@ function renderTab(id){
   } else if(id==='sales'){
     safeRender(()=>renderProducts(so,f),'products');
     safeRender(()=>renderLocation(so,f),'location');
-    safeRender(()=>renderPaymentSplit(ss),'paymentsplit');
+    safeRender(()=>renderPaymentSplit(window._ssAllTime||ss),'paymentsplit');
     safeRender(()=>renderProductVolume(so,f),'prodvol');
   } else if(id==='profitability'){
     safeRender(()=>renderRevExp(invOnly,exp,f),'revexp');
     safeRender(()=>renderGPProduct(so),'gpproduct');
     safeRender(()=>renderMargin(so),'margin');
   } else if(id==='receivables'){
+    const ssAT=window._ssAllTime||ss;
     safeRender(()=>renderOutstanding(custBal),'outstanding');
-    safeRender(()=>renderAgeing(ss),'ageing');
+    safeRender(()=>renderAgeing(ssAT),'ageing');
     safeRender(()=>populateLedgerDropdown(),'ledger-dropdown');
   } else if(id==='forecast'){
     safeRender(()=>renderForecast(invOnly,f),'forecast');
@@ -1497,20 +1502,38 @@ function renderLedger(){
   // Compute true balance per invoice by netting PAY- rows against INV rows.
   // Static balance_due on INV rows may be stale from the import;
   // PAY- rows carry negative balance_due that cancels the original balance.
+  // True due per invoice:
+  // Start with total_bill minus invoice-level discount, cash, upi.
+  // Then subtract any PAY- rows that reference this invoice.
   const allCustRows=(DATA.sales_summary||[]).filter(r=>r.customer_name===cust);
+
+  // Step 1: seed from INV row values
   const netBalMap={};
   allCustRows.forEach(r=>{
     const isPay=String(r.reference_invoice_id||'').startsWith('PAY-');
     if(!isPay){
-      netBalMap[r.reference_invoice_id]=
-        (netBalMap[r.reference_invoice_id]||0)+(+r.balance_due||0);
-    } else {
-      const ref=r.reference_invoice;
-      if(ref) netBalMap[ref]=(netBalMap[ref]||0)+(+r.balance_due||0);
+      // True base = bill minus what was collected at invoice time
+      const base=(+r.total_bill||0)
+        -(+r.discount_amount||0)
+        -(+r.cash_received||0)
+        -(+r.upi_received||0);
+      netBalMap[r.reference_invoice_id]=Math.max(0, base);
     }
   });
 
-  // Pending = invoices where net true balance > 0
+  // Step 2: subtract subsequent PAY- row payments
+  allCustRows.forEach(r=>{
+    const isPay=String(r.reference_invoice_id||'').startsWith('PAY-');
+    if(isPay){
+      const ref=r.reference_invoice;
+      if(ref && netBalMap[ref]!==undefined){
+        const paid=(+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0);
+        netBalMap[ref]=Math.max(0, netBalMap[ref]-paid);
+      }
+    }
+  });
+
+  // Pending = invoices with remaining balance > 0
   const pendInv=invRows
     .map(r=>({...r, trueDue:netBalMap[r.reference_invoice_id]||0}))
     .filter(r=>r.trueDue>0.01)
@@ -1537,14 +1560,29 @@ function renderLedger(){
   }
 
   // Payment history (PAY- rows), newest first
-  const payments = payRows.sort((a,b)=>(b.sale_date||'').localeCompare(a.sale_date||''));
+  // Combine two sources of payment records:
+  // 1. PAY- rows = payments recorded via the Payments page
+  // 2. INV rows where cash or UPI was collected at invoice time
+  const directPay = invRows.filter(r=>
+    (+(r.cash_received)||0)+(+(r.upi_received)||0)+(+(r.discount_amount)||0) > 0.01
+  ).map(r=>({
+    sale_date:       r.sale_date,
+    reference_invoice_id: r.reference_invoice_id+' (at invoice)',
+    cash_received:   +r.cash_received||0,
+    upi_received:    +r.upi_received||0,
+    discount_amount: +r.discount_amount||0,
+    _isInvPay: true
+  }));
+
+  const payments = [...payRows, ...directPay]
+    .sort((a,b)=>(b.sale_date||'').localeCompare(a.sale_date||''));
 
   if(!payments.length){
     document.getElementById('ledger-payments').innerHTML=
       '<div class="empty-msg">No payments recorded</div>';
   } else {
     let html='<table class="ledger-table"><thead><tr>'
-      +'<th>Date</th><th>Payment ID</th><th>Cash</th><th>UPI</th><th>Disc</th><th>Total</th>'
+      +'<th>Date</th><th>Reference</th><th>Cash</th><th>UPI</th><th>Disc</th><th>Total</th>'
       +'</tr></thead><tbody>';
     payments.forEach(r=>{
       const total=(+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0);
