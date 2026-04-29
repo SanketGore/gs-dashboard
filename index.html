@@ -358,6 +358,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
       </div>
       <button class="btn btn-blue btn-sm" onclick="applyFilters()">Apply</button>
       <button class="btn btn-outline btn-sm" onclick="showUpload()">📂 Data</button>
+      <button class="btn btn-outline btn-sm" onclick="clearCacheAndReload()" title="Clear cache and fetch latest data">🔄 Refresh</button>
     </div>
   </div>
 
@@ -656,8 +657,20 @@ async function startApp(){
   }catch(e){}
   // Fall back to cached data
   const raw=localStorage.getItem('gs_dashboard_data');
-  if(raw) document.getElementById('cached-msg').style.display='block';
+  if(raw){
+    try{
+      const _d=JSON.parse(raw);
+      const _el=document.getElementById('cached-date');
+      if(_el&&_d.exported_at) _el.textContent=_d.exported_at;
+    }catch(e){}
+    document.getElementById('cached-msg').style.display='block';
+  }
   document.getElementById('upload-screen').style.display='flex';
+}
+
+function clearCacheAndReload(){
+  localStorage.removeItem('gs_dashboard_data');
+  location.reload();
 }
 
 // Entry point — runs on every page load
