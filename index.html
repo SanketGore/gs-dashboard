@@ -1010,7 +1010,7 @@ function applyFilters(){
   const profit=so.reduce((s,r)=>s+((+r.total_sale||0)-(+r.buying_rate_at_time||0)),0);
   // Outstanding — all time, filtered by location+customer selection only
   const ssAll=(DATA.sales_summary||[]).filter(r=>_matchesLocCust(r.customer_name,f));
-  const custBal={};ssAll.forEach(r=>{custBal[r.customer_name]=(custBal[r.customer_name]||0)+(+r.balance_due||0);});
+  // custBal now built from tpMaps.byCustomer (see below)
   const outstanding=Object.values(custBal).filter(v=>v>0.005).reduce((s,v)=>s+v,0);
   const prods=DATA.products||[];
   const stockVal=prods.reduce((s,p)=>s+(+p.current_stock||0)*(+p.cost_price_unit||0),0);
@@ -1489,7 +1489,7 @@ function renderLedger(){
 
   const totalBilled   = invRows.reduce((s,r)=>s+(+r.total_bill||0),0);
   const totalReceived = allRows.reduce((s,r)=>s+(+r.total_received||0),0);
-  const netBalance    = allRows.reduce((s,r)=>s+(+r.balance_due||0),0);
+  const netBalance    = [...byInvoice.values()].reduce((s,v)=>s+v,0);
 
   // Summary chips
   document.getElementById('ledger-summary').innerHTML=`
@@ -1502,40 +1502,13 @@ function renderLedger(){
   // Compute true balance per invoice by netting PAY- rows against INV rows.
   // Static balance_due on INV rows may be stale from the import;
   // PAY- rows carry negative balance_due that cancels the original balance.
-  // True due per invoice:
-  // Start with total_bill minus invoice-level discount, cash, upi.
-  // Then subtract any PAY- rows that reference this invoice.
+  // buildTruePendingMaps — mirrors Python _TRUE_PENDING_EXPR exactly
   const allCustRows=(DATA.sales_summary||[]).filter(r=>r.customer_name===cust);
+  const {byInvoice}=buildTruePendingMaps(allCustRows);
 
-  // Step 1: seed from INV row values
-  const netBalMap={};
-  allCustRows.forEach(r=>{
-    const isPay=String(r.reference_invoice_id||'').startsWith('PAY-');
-    if(!isPay){
-      // True base = bill minus what was collected at invoice time
-      const base=(+r.total_bill||0)
-        -(+r.discount_amount||0)
-        -(+r.cash_received||0)
-        -(+r.upi_received||0);
-      netBalMap[r.reference_invoice_id]=Math.max(0, base);
-    }
-  });
-
-  // Step 2: subtract subsequent PAY- row payments
-  allCustRows.forEach(r=>{
-    const isPay=String(r.reference_invoice_id||'').startsWith('PAY-');
-    if(isPay){
-      const ref=r.reference_invoice;
-      if(ref && netBalMap[ref]!==undefined){
-        const paid=(+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0);
-        netBalMap[ref]=Math.max(0, netBalMap[ref]-paid);
-      }
-    }
-  });
-
-  // Pending = invoices with remaining balance > 0
+  // Pending = invoices with true_pending > 0
   const pendInv=invRows
-    .map(r=>({...r, trueDue:netBalMap[r.reference_invoice_id]||0}))
+    .map(r=>({...r, trueDue:byInvoice.get(r.reference_invoice_id)||0}))
     .filter(r=>r.trueDue>0.01)
     .sort((a,b)=>(a.sale_date||'').localeCompare(b.sale_date||''));
 
