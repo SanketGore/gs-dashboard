@@ -670,7 +670,11 @@ async function startApp(){
 
 function clearCacheAndReload(){
   localStorage.removeItem('gs_dashboard_data');
-  location.reload();
+  // Hide upload screen and go straight to startApp which auto-fetches from GitHub.
+  // Never show the upload screen — the user should not need to upload manually.
+  document.getElementById('upload-screen').style.display='none';
+  document.getElementById('cached-msg').style.display='none';
+  startApp();
 }
 
 // Entry point — runs on every page load
