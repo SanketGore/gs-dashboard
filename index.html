@@ -1008,11 +1008,10 @@ function applyFilters(){
   const invOnly=ss.filter(r=>!(r.reference_invoice_id||'').startsWith('PAY-'));
   const revenue=invOnly.reduce((s,r)=>s+(+r.total_bill||0),0);
   const profit=so.reduce((s,r)=>s+((+r.total_sale||0)-(+r.buying_rate_at_time||0)),0);
-  // Outstanding — all-time, filtered by loc+customer, using true_pending formula
+  // Outstanding — all time, filtered by location+customer selection only
   const ssAll=(DATA.sales_summary||[]).filter(r=>_matchesLocCust(r.customer_name,f));
-  const tpMaps=buildTruePendingMaps(ssAll);
-  const custBal=Object.fromEntries(tpMaps.byCustomer);
-  const outstanding=[...tpMaps.byCustomer.values()].filter(v=>v>0.005).reduce((s,v)=>s+v,0);
+  const custBal={};ssAll.forEach(r=>{custBal[r.customer_name]=(custBal[r.customer_name]||0)+(+r.balance_due||0);});
+  const outstanding=Object.values(custBal).filter(v=>v>0.005).reduce((s,v)=>s+v,0);
   const prods=DATA.products||[];
   const stockVal=prods.reduce((s,p)=>s+(+p.current_stock||0)*(+p.cost_price_unit||0),0);
   const si=(()=>{let r=DATA.stock_in||[];if(f.from)r=r.filter(x=>x.transaction_date>=f.from);if(f.to)r=r.filter(x=>x.transaction_date<=f.to);return r;})();
@@ -1027,10 +1026,9 @@ function applyFilters(){
     {icon:'🛒',label:'TOTAL PURCHASES',value:fmt(purchases),color:C.navy},
   ]);
 
-  // Store for tab renders (ssAll = all-time loc+cust filtered, no date filter)
+  // Store for tab renders
   window._f=f; window._so=so; window._ss=ss; window._invOnly=invOnly;
-  window._custBal=custBal; window._tpMaps=tpMaps;
-  window._ssAllTime=ssAll; window._exp=filterExp(f);
+  window._custBal=custBal; window._exp=filterExp(f);
   renderTab(activeTab);
 }
 
@@ -1043,16 +1041,15 @@ function renderTab(id){
   } else if(id==='sales'){
     safeRender(()=>renderProducts(so,f),'products');
     safeRender(()=>renderLocation(so,f),'location');
-    safeRender(()=>renderPaymentSplit(window._ssAllTime||ss),'paymentsplit');
+    safeRender(()=>renderPaymentSplit(ss),'paymentsplit');
     safeRender(()=>renderProductVolume(so,f),'prodvol');
   } else if(id==='profitability'){
     safeRender(()=>renderRevExp(invOnly,exp,f),'revexp');
     safeRender(()=>renderGPProduct(so),'gpproduct');
     safeRender(()=>renderMargin(so),'margin');
   } else if(id==='receivables'){
-    const ssAT=window._ssAllTime||ss;
     safeRender(()=>renderOutstanding(custBal),'outstanding');
-    safeRender(()=>renderAgeing(ssAT),'ageing');
+    safeRender(()=>renderAgeing(ss),'ageing');
     safeRender(()=>populateLedgerDropdown(),'ledger-dropdown');
   } else if(id==='forecast'){
     safeRender(()=>renderForecast(invOnly,f),'forecast');
@@ -1487,7 +1484,7 @@ function renderLedger(){
 
   const totalBilled   = invRows.reduce((s,r)=>s+(+r.total_bill||0),0);
   const totalReceived = allRows.reduce((s,r)=>s+(+r.total_received||0),0);
-  const netBalance    = [...byInvoice.values()].reduce((s,v)=>s+v,0);
+  const netBalance    = allRows.reduce((s,r)=>s+(+r.balance_due||0),0);
 
   // Summary chips
   document.getElementById('ledger-summary').innerHTML=`
@@ -1497,17 +1494,9 @@ function renderLedger(){
       ${netBalance>0.01?'⏳ Outstanding':'✅ Settled'}: ${fmtFull(Math.abs(netBalance))}
     </div>`;
 
-  // Compute true balance per invoice by netting PAY- rows against INV rows.
-  // Static balance_due on INV rows may be stale from the import;
-  // PAY- rows carry negative balance_due that cancels the original balance.
-  // buildTruePendingMaps — mirrors Python _TRUE_PENDING_EXPR exactly
-  const allCustRows=(DATA.sales_summary||[]).filter(r=>r.customer_name===cust);
-  const {byInvoice}=buildTruePendingMaps(allCustRows);
-
-  // Pending = invoices with true_pending > 0
-  const pendInv=invRows
-    .map(r=>({...r, trueDue:byInvoice.get(r.reference_invoice_id)||0}))
-    .filter(r=>r.trueDue>0.01)
+  // Pending invoices (balance_due > 0)
+  const pendInv = invRows
+    .filter(r=>(+r.balance_due||0)>0.01)
     .sort((a,b)=>(a.sale_date||'').localeCompare(b.sale_date||''));
 
   if(!pendInv.length){
@@ -1523,7 +1512,7 @@ function renderLedger(){
         <td style="font-size:10px">${r.reference_invoice_id||'—'}</td>
         <td>${r.physical_invoice_no||'—'}</td>
         <td>${fmtFull(+r.total_bill||0)}</td>
-        <td class="due">${fmtFull(r.trueDue)}</td>
+        <td class="due">${fmtFull(+r.balance_due||0)}</td>
       </tr>`;
     });
     html+='</tbody></table>';
@@ -1531,29 +1520,14 @@ function renderLedger(){
   }
 
   // Payment history (PAY- rows), newest first
-  // Combine two sources of payment records:
-  // 1. PAY- rows = payments recorded via the Payments page
-  // 2. INV rows where cash or UPI was collected at invoice time
-  const directPay = invRows.filter(r=>
-    (+(r.cash_received)||0)+(+(r.upi_received)||0)+(+(r.discount_amount)||0) > 0.01
-  ).map(r=>({
-    sale_date:       r.sale_date,
-    reference_invoice_id: r.reference_invoice_id+' (at invoice)',
-    cash_received:   +r.cash_received||0,
-    upi_received:    +r.upi_received||0,
-    discount_amount: +r.discount_amount||0,
-    _isInvPay: true
-  }));
-
-  const payments = [...payRows, ...directPay]
-    .sort((a,b)=>(b.sale_date||'').localeCompare(a.sale_date||''));
+  const payments = payRows.sort((a,b)=>(b.sale_date||'').localeCompare(a.sale_date||''));
 
   if(!payments.length){
     document.getElementById('ledger-payments').innerHTML=
       '<div class="empty-msg">No payments recorded</div>';
   } else {
     let html='<table class="ledger-table"><thead><tr>'
-      +'<th>Date</th><th>Reference</th><th>Cash</th><th>UPI</th><th>Disc</th><th>Total</th>'
+      +'<th>Date</th><th>Payment ID</th><th>Cash</th><th>UPI</th><th>Disc</th><th>Total</th>'
       +'</tr></thead><tbody>';
     payments.forEach(r=>{
       const total=(+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0);
