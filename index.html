@@ -358,7 +358,6 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
       </div>
       <button class="btn btn-blue btn-sm" onclick="applyFilters()">Apply</button>
       <button class="btn btn-outline btn-sm" onclick="showUpload()">📂 Data</button>
-      <button class="btn btn-outline btn-sm" onclick="clearCacheAndReload()" title="Clear cache and fetch latest data">🔄 Refresh</button>
     </div>
   </div>
 
@@ -657,24 +656,8 @@ async function startApp(){
   }catch(e){}
   // Fall back to cached data
   const raw=localStorage.getItem('gs_dashboard_data');
-  if(raw){
-    try{
-      const _d=JSON.parse(raw);
-      const _el=document.getElementById('cached-date');
-      if(_el&&_d.exported_at) _el.textContent=_d.exported_at;
-    }catch(e){}
-    document.getElementById('cached-msg').style.display='block';
-  }
+  if(raw) document.getElementById('cached-msg').style.display='block';
   document.getElementById('upload-screen').style.display='flex';
-}
-
-function clearCacheAndReload(){
-  localStorage.removeItem('gs_dashboard_data');
-  // Hide upload screen and go straight to startApp which auto-fetches from GitHub.
-  // Never show the upload screen — the user should not need to upload manually.
-  document.getElementById('upload-screen').style.display='none';
-  document.getElementById('cached-msg').style.display='none';
-  startApp();
 }
 
 // Entry point — runs on every page load
@@ -726,25 +709,6 @@ function periodKey(d,period){
   return d.slice(0,7);
 }
 function destroyChart(id){if(charts[id]){try{charts[id].destroy();}catch(e){}delete charts[id];}}
-
-// Show/hide empty message WITHOUT destroying the canvas.
-// Destroying the canvas via parentElement.innerHTML means subsequent renders
-// find ctx() === null and silently return, leaving the chart permanently blank.
-function _noDataMsg(canvasId, msg){
-  const c=canvas(canvasId); if(!c) return;
-  const wrap=c.parentElement;
-  c.style.display='none';
-  let el=wrap.querySelector('.empty-msg');
-  if(!el){ el=document.createElement('div'); el.className='empty-msg'; wrap.appendChild(el); }
-  el.textContent=msg;
-  el.style.display='';
-}
-function _clearNoDataMsg(canvasId){
-  const c=canvas(canvasId); if(!c) return;
-  c.style.display='';
-  const el=c.parentElement.querySelector('.empty-msg');
-  if(el) el.style.display='none';
-}
 function safeRender(fn,name){
   try{fn();}catch(e){console.warn('Chart error ['+name+']:',e);}
 }
@@ -1234,11 +1198,10 @@ function renderLocation(so){
 // ══════════════════════════════════════════════
 function renderPaymentSplit(ss){
   destroyChart('payment-split');
-  _clearNoDataMsg('chart-payment-split');
   const c=ctx('chart-payment-split'); if(!c)return;
   const cash=ss.reduce((s,r)=>s+(+r.cash_received||0),0);
   const upi=ss.reduce((s,r)=>s+(+r.upi_received||0),0);
-  if(cash===0&&upi===0){_noDataMsg('chart-payment-split','No payment data');return;}
+  if(cash===0&&upi===0){canvas('chart-payment-split').parentElement.innerHTML='<div class="empty-msg">No payment data</div>';return;}
   charts['payment-split']=new Chart(c,{type:'doughnut',
     data:{labels:[`Cash (${fmt(cash)})`,`UPI (${fmt(upi)})`],
       datasets:[{data:[cash,upi],backgroundColor:[C.blue,C.teal],borderWidth:2,borderColor:'#fff',hoverOffset:6}]},
@@ -1344,7 +1307,6 @@ function renderMargin(so){
 // ══════════════════════════════════════════════
 function renderOutstanding(custBal){
   destroyChart('outstanding');
-  _clearNoDataMsg('chart-outstanding');
   const c=ctx('chart-outstanding'); if(!c)return;
   // Recompute per-customer true_pending from ssAllTime (no date filter)
   const ssAT=window._ssAllTime||[];
@@ -1359,7 +1321,7 @@ function renderOutstanding(custBal){
   });
   const outBal={}; tpOut.forEach((v,id)=>{ if(v>0.005){ const cu=tcOut.get(id)||''; outBal[cu]=(outBal[cu]||0)+v; } });
   const sorted=Object.entries(outBal).filter(e=>e[1]>0.005).sort((a,b)=>b[1]-a[1]).slice(0,20);
-  if(!sorted.length){_noDataMsg('chart-outstanding','No outstanding balances 🎉');return;}
+  if(!sorted.length){canvas('chart-outstanding').parentElement.innerHTML='<div class="empty-msg">No outstanding balances 🎉</div>';return;}
   const labels=sorted.map(e=>e[0].length>22?e[0].slice(0,22)+'…':e[0]).reverse();
   const values=sorted.map(e=>e[1]).reverse();
   charts.outstanding=new Chart(c,{type:'bar',
@@ -1375,7 +1337,6 @@ function renderOutstanding(custBal){
 // ══════════════════════════════════════════════
 function renderAgeing(ssAT){
   destroyChart('ageing');
-  _clearNoDataMsg('chart-ageing');
   const c=ctx('chart-ageing'); if(!c)return;
   const today=new Date(); today.setHours(0,0,0,0);
   // true_pending per invoice — mirrors Python _TRUE_PENDING_EXPR
@@ -1392,7 +1353,7 @@ function renderAgeing(ssAT){
     const ref=r.reference_invoice||'';
     if(ref&&tpAgeMap.has(ref)) tpAgeMap.set(ref,Math.max(0,tpAgeMap.get(ref)-(+r.cash_received||0)-(+r.upi_received||0)-(+r.discount_amount||0)));
   });
-  if(![...tpAgeMap.values()].some(v=>v>0.005)){_noDataMsg('chart-ageing','No outstanding balances 🎉');return;}
+  if(![...tpAgeMap.values()].some(v=>v>0.005)){canvas('chart-ageing').parentElement.innerHTML='<div class="empty-msg">No outstanding balances 🎉</div>';return;}
 
   const buckets={'0–30 d':{},'31–60 d':{},'60+ d':{}};
   tpAgeMap.forEach((tp,id)=>{
