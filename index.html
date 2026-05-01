@@ -804,13 +804,12 @@ function initDashboard(){
   document.getElementById('export-ts2').textContent=DATA.exported_at||'—';
   document.getElementById('info-bar').style.display='flex';
   populateFilters();
-  // Default date range: last 3 months of data
-  const dates=(DATA.stock_out||[]).map(r=>r.sale_date).filter(Boolean).sort();
-  if(dates.length){
+  // Default date range: all-time (oldest to latest)
+const dates=(DATA.stock_out||[]).map(r=>r.sale_date).filter(Boolean).sort();
+if(dates.length){
     const last=dates[dates.length-1];
     document.getElementById('f-to').value=last;
-    const d=new Date(last); d.setMonth(d.getMonth()-3);
-    document.getElementById('f-from').value=d.toISOString().split('T')[0];
+    document.getElementById('f-from').value=dates[0];
   }
   // KEY FIX: defer chart rendering until AFTER the browser has reflowed
   // the layout. Setting display:block above does not immediately cause a
