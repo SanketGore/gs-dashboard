@@ -266,10 +266,11 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
   font-size:13px;font-weight:600;color:var(--accent);}
 @media(max-width:700px){.calc-form{grid-template-columns:1fr 1fr;}}
 
-.chart-scroll-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%;}
-.chart-scroll-wrap::-webkit-scrollbar{height:5px;}
-.chart-scroll-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
-.chart-canvas-scroll{min-width:100%;height:280px;}
+/* Trend chart horizontal scroll */
+.chart-canvas-wrap.scrollable{overflow-x:auto;-webkit-overflow-scrolling:touch;overflow-y:hidden;}
+.chart-canvas-wrap.scrollable::-webkit-scrollbar{height:5px;}
+.chart-canvas-wrap.scrollable::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+.trend-inner{height:100%;}
 </style>
 </head>
 <body>
@@ -394,11 +395,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
       <div class="chart-grid g-1 fade-in">
         <div class="chart-card">
           <div class="chart-title" id="trend-title">Revenue &amp; COGS Trend</div>
-          <div class="chart-scroll-wrap" id="trend-scroll-wrap">
-          <div class="chart-canvas-scroll" id="trend-canvas-inner">
-            <canvas id="chart-trend"></canvas>
-          </div>
-        </div>
+          <div class="chart-canvas-wrap scrollable" id="trend-scroll-wrap"><div class="trend-inner" id="trend-canvas-inner"><canvas id="chart-trend"></canvas></div></div>
         </div>
       </div>
       <div class="chart-grid g-2 fade-in">
@@ -735,6 +732,8 @@ function periodKey(d,period){
   return d.slice(0,7);
 }
 function destroyChart(id){if(charts[id]){try{charts[id].destroy();}catch(e){}delete charts[id];}}
+function _noDataMsg(cid,msg){const c=canvas(cid);if(!c)return;c.style.display='none';let el=c.parentElement.querySelector('.empty-msg');if(!el){el=document.createElement('div');el.className='empty-msg';c.parentElement.appendChild(el);}el.textContent=msg;el.style.display='';}
+function _clearNoDataMsg(cid){const c=canvas(cid);if(!c)return;c.style.display='';const el=c.parentElement.querySelector('.empty-msg');if(el)el.style.display='none';}
 function safeRender(fn,name){
   try{fn();}catch(e){console.warn('Chart error ['+name+']:',e);}
 }
@@ -818,8 +817,7 @@ function initDashboard(){
   if(dates.length){
     const last=dates[dates.length-1];
     document.getElementById('f-to').value=last;
-    const d=new Date(last); d.setMonth(d.getMonth()-3);
-    document.getElementById('f-from').value=d.toISOString().split('T')[0];
+    document.getElementById('f-from').value=dates[0];  // oldest record
   }
   // KEY FIX: defer chart rendering until AFTER the browser has reflowed
   // the layout. Setting display:block above does not immediately cause a
@@ -1117,13 +1115,12 @@ function renderTrend(so, invOnly, f){
   document.getElementById('trend-title').textContent=mainLabel+' & COGS by '+period;
   destroyChart('trend');
   const c=ctx('chart-trend'); if(!c)return;
-  // Minimum 40px per data point — enables horizontal scroll instead of squish
+  // Expand canvas width so bars never get squished; outer div scrolls
   const _wrap=document.getElementById('trend-scroll-wrap');
   const _inner=document.getElementById('trend-canvas-inner');
   if(_wrap&&_inner){
-    const minW=Math.max(keys.length*40,_wrap.offsetWidth||600);
-    _inner.style.width=minW+'px';
-    _inner.style.height='280px';
+    const minPx=keys.length*38;
+    _inner.style.width=Math.max(minPx,_wrap.offsetWidth||600)+'px';
   }
   charts.trend=new Chart(c,{
     type:isDaily?'line':'bar',
@@ -1232,11 +1229,10 @@ function renderLocation(so){
 // ══════════════════════════════════════════════
 function renderPaymentSplit(ss){
   destroyChart('payment-split');
-  _clearNoDataMsg('chart-payment-split');
   const c=ctx('chart-payment-split'); if(!c)return;
   const cash=ss.reduce((s,r)=>s+(+r.cash_received||0),0);
   const upi=ss.reduce((s,r)=>s+(+r.upi_received||0),0);
-  if(cash===0&&upi===0){_noDataMsg('chart-payment-split','No payment data');return;}
+  _noDataMsg('chart-payment-split','No payment data');return;}
   charts['payment-split']=new Chart(c,{type:'doughnut',
     data:{labels:[`Cash (${fmt(cash)})`,`UPI (${fmt(upi)})`],
       datasets:[{data:[cash,upi],backgroundColor:[C.blue,C.teal],borderWidth:2,borderColor:'#fff',hoverOffset:6}]},
@@ -1357,7 +1353,7 @@ function renderOutstanding(custBal){
   });
   const outBal={}; tpOut.forEach((v,id)=>{ if(v>0.005){ const cu=tcOut.get(id)||''; outBal[cu]=(outBal[cu]||0)+v; } });
   const sorted=Object.entries(outBal).filter(e=>e[1]>0.005).sort((a,b)=>b[1]-a[1]).slice(0,20);
-  if(!sorted.length){canvas('chart-outstanding').parentElement.innerHTML='<div class="empty-msg">No outstanding balances 🎉</div>';return;}
+  if(!sorted.length){_noDataMsg('chart-outstanding','No outstanding balances 🎉');return;}
   const labels=sorted.map(e=>e[0].length>22?e[0].slice(0,22)+'…':e[0]).reverse();
   const values=sorted.map(e=>e[1]).reverse();
   charts.outstanding=new Chart(c,{type:'bar',
@@ -1390,7 +1386,7 @@ function renderAgeing(ssAT){
     const ref=r.reference_invoice||'';
     if(ref&&tpAgeMap.has(ref)) tpAgeMap.set(ref,Math.max(0,tpAgeMap.get(ref)-(+r.cash_received||0)-(+r.upi_received||0)-(+r.discount_amount||0)));
   });
-  if(![...tpAgeMap.values()].some(v=>v>0.005)){canvas('chart-ageing').parentElement.innerHTML='<div class="empty-msg">No outstanding balances 🎉</div>';return;}
+  if(![...tpAgeMap.values()].some(v=>v>0.005)){_noDataMsg('chart-ageing','No outstanding balances 🎉');return;}
 
   const buckets={'0–30 d':{},'31–60 d':{},'60+ d':{}};
   tpAgeMap.forEach((tp,id)=>{
