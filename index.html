@@ -265,6 +265,11 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .restock-total{margin-top:10px;padding:10px 14px;background:#eaf4fb;border-radius:5px;
   font-size:13px;font-weight:600;color:var(--accent);}
 @media(max-width:700px){.calc-form{grid-template-columns:1fr 1fr;}}
+
+.chart-scroll-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%;}
+.chart-scroll-wrap::-webkit-scrollbar{height:5px;}
+.chart-scroll-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+.chart-canvas-scroll{min-width:100%;height:280px;}
 </style>
 </head>
 <body>
@@ -389,7 +394,11 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
       <div class="chart-grid g-1 fade-in">
         <div class="chart-card">
           <div class="chart-title" id="trend-title">Revenue &amp; COGS Trend</div>
-          <div class="chart-canvas-wrap"><canvas id="chart-trend"></canvas></div>
+          <div class="chart-scroll-wrap" id="trend-scroll-wrap">
+          <div class="chart-canvas-scroll" id="trend-canvas-inner">
+            <canvas id="chart-trend"></canvas>
+          </div>
+        </div>
         </div>
       </div>
       <div class="chart-grid g-2 fade-in">
@@ -1108,6 +1117,14 @@ function renderTrend(so, invOnly, f){
   document.getElementById('trend-title').textContent=mainLabel+' & COGS by '+period;
   destroyChart('trend');
   const c=ctx('chart-trend'); if(!c)return;
+  // Minimum 40px per data point — enables horizontal scroll instead of squish
+  const _wrap=document.getElementById('trend-scroll-wrap');
+  const _inner=document.getElementById('trend-canvas-inner');
+  if(_wrap&&_inner){
+    const minW=Math.max(keys.length*40,_wrap.offsetWidth||600);
+    _inner.style.width=minW+'px';
+    _inner.style.height='280px';
+  }
   charts.trend=new Chart(c,{
     type:isDaily?'line':'bar',
     data:{labels,datasets:[
@@ -1118,7 +1135,7 @@ function renderTrend(so, invOnly, f){
         ? {label:'COGS',data:cogsVals,borderColor:C.teal,backgroundColor:C.teal+'33',fill:true,tension:0.3,pointRadius:3,borderWidth:2.5,order:2}
         : {label:'COGS',data:cogsVals,backgroundColor:C.teal+'cc',borderRadius:3,order:2},
     ]},
-    options:{responsive:true,maintainAspectRatio:false,
+    options:{responsive:false,maintainAspectRatio:false,
       plugins:{legend:{labels:{font:{size:11}}}},
       scales:{
         y:{ticks:{callback:v=>fmt(v).replace('₹',''),font:{size:9}},grid:{color:'#f0f0f0'}},
@@ -1215,10 +1232,11 @@ function renderLocation(so){
 // ══════════════════════════════════════════════
 function renderPaymentSplit(ss){
   destroyChart('payment-split');
+  _clearNoDataMsg('chart-payment-split');
   const c=ctx('chart-payment-split'); if(!c)return;
   const cash=ss.reduce((s,r)=>s+(+r.cash_received||0),0);
   const upi=ss.reduce((s,r)=>s+(+r.upi_received||0),0);
-  if(cash===0&&upi===0){canvas('chart-payment-split').parentElement.innerHTML='<div class="empty-msg">No payment data</div>';return;}
+  if(cash===0&&upi===0){_noDataMsg('chart-payment-split','No payment data');return;}
   charts['payment-split']=new Chart(c,{type:'doughnut',
     data:{labels:[`Cash (${fmt(cash)})`,`UPI (${fmt(upi)})`],
       datasets:[{data:[cash,upi],backgroundColor:[C.blue,C.teal],borderWidth:2,borderColor:'#fff',hoverOffset:6}]},
@@ -1324,6 +1342,7 @@ function renderMargin(so){
 // ══════════════════════════════════════════════
 function renderOutstanding(custBal){
   destroyChart('outstanding');
+  _clearNoDataMsg('chart-outstanding');
   const c=ctx('chart-outstanding'); if(!c)return;
   // Recompute per-customer true_pending from ssAllTime (no date filter)
   const ssAT=window._ssAllTime||[];
@@ -1354,6 +1373,7 @@ function renderOutstanding(custBal){
 // ══════════════════════════════════════════════
 function renderAgeing(ssAT){
   destroyChart('ageing');
+  _clearNoDataMsg('chart-ageing');
   const c=ctx('chart-ageing'); if(!c)return;
   const today=new Date(); today.setHours(0,0,0,0);
   // true_pending per invoice — mirrors Python _TRUE_PENDING_EXPR
