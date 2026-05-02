@@ -1338,10 +1338,24 @@ function renderOutstanding(custBal){
   destroyChart('outstanding');
   _clearNoDataMsg('chart-outstanding');
   const c=ctx('chart-outstanding'); if(!c)return;
-  // Use balance_due net sum per customer (INV positive + PAY negative).
+  // Build per-invoice true_pending, then aggregate by customer
   const ssAT=window._ssAllTime||[];
+  const tpOut=new Map(), tcOut=new Map();
+  ssAT.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-')).forEach(r=>{
+    const id=r.reference_invoice_id;
+    tpOut.set(id, Math.max(0,(+r.total_bill||0)-(+r.discount_amount||0)
+                           -(+r.cash_received||0)-(+r.upi_received||0)));
+    tcOut.set(id, r.customer_name||'');
+  });
+  ssAT.filter(r=>String(r.reference_invoice_id||'').startsWith('PAY-')).forEach(r=>{
+    const ref=r.reference_invoice||'';
+    if(ref && tpOut.has(ref)){
+      const paid=(+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0);
+      tpOut.set(ref, Math.max(0, tpOut.get(ref)-paid));
+    }
+  });
   const outBal={};
-  ssAT.forEach(r=>{ const cu=r.customer_name||''; outBal[cu]=(outBal[cu]||0)+(+r.balance_due||0); });
+  tpOut.forEach((v,id)=>{ if(v>0.005){ const cu=tcOut.get(id)||''; outBal[cu]=(outBal[cu]||0)+v; } });
   const sorted=Object.entries(outBal).filter(e=>e[1]>0.005).sort((a,b)=>b[1]-a[1]).slice(0,20);
   if(!sorted.length){_noDataMsg('chart-outstanding','No outstanding balances 🎉');return;}
   const labels=sorted.map(e=>e[0].length>22?e[0].slice(0,22)+'…':e[0]).reverse();
@@ -1362,20 +1376,35 @@ function renderAgeing(ssAT){
   _clearNoDataMsg('chart-ageing');
   const c=ctx('chart-ageing'); if(!c)return;
   const today=new Date(); today.setHours(0,0,0,0);
-  // Use balance_due on INV rows directly — desktop app keeps this accurate.
-  const pendingInvRows=ssAT.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-')&&(+r.balance_due||0)>0.005);
-  if(!pendingInvRows.length){_noDataMsg('chart-ageing','No outstanding balances 🎉');return;}
+  // Build per-invoice true_pending using tpLedger (reference_invoice is populated)
+  const tpAgeMap=new Map(), tpDateMap=new Map(), tpCustMap=new Map();
+  ssAT.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-')).forEach(r=>{
+    const id=r.reference_invoice_id;
+    tpAgeMap.set(id, Math.max(0,(+r.total_bill||0)-(+r.discount_amount||0)
+                              -(+r.cash_received||0)-(+r.upi_received||0)));
+    tpDateMap.set(id, r.sale_date||'');
+    tpCustMap.set(id, r.customer_name||'Unknown');
+  });
+  ssAT.filter(r=>String(r.reference_invoice_id||'').startsWith('PAY-')).forEach(r=>{
+    const ref=r.reference_invoice||'';
+    if(ref && tpAgeMap.has(ref)){
+      const paid=(+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0);
+      tpAgeMap.set(ref, Math.max(0, tpAgeMap.get(ref)-paid));
+    }
+  });
+  if(![...tpAgeMap.values()].some(v=>v>0.005)){_noDataMsg('chart-ageing','No outstanding balances 🎉');return;}
 
   const buckets={'0–30 d':{},'31–60 d':{},'60+ d':{}};
-  pendingInvRows.forEach(r=>{
-    const due=+r.balance_due||0;
-    const d=new Date(r.sale_date||''); d.setHours(0,0,0,0);
+  tpAgeMap.forEach((tp,id)=>{
+    if(tp<=0.005) return;
+    const d=new Date(tpDateMap.get(id)||''); d.setHours(0,0,0,0);
     const age=Math.round((today-d)/86400000);
     const bucket=age<=30?'0–30 d':age<=60?'31–60 d':'60+ d';
-    const cust=r.customer_name||'Unknown';
-    buckets[bucket][cust]=(buckets[bucket][cust]||0)+due;
+    const cust=tpCustMap.get(id)||'Unknown';
+    buckets[bucket][cust]=(buckets[bucket][cust]||0)+tp;
   });
-  const allCust=[...new Set(pendingInvRows.map(r=>r.customer_name||'Unknown'))];
+  const allCust=[...new Set([...tpAgeMap.keys()].filter(id=>tpAgeMap.get(id)>0.005)
+    .map(id=>tpCustMap.get(id)||'Unknown'))];
   const totals={}; allCust.forEach(c=>{totals[c]=Object.values(buckets).reduce((s,b)=>s+(b[c]||0),0);});
   const sorted=allCust.sort((a,b)=>totals[b]-totals[a]).slice(0,15).reverse();
 
@@ -1528,8 +1557,23 @@ function renderLedger(){
   const totalReceived = allRows.reduce((s,r)=>s+(+r.total_received||0),0);
   const netBalance    = allRows.reduce((s,r)=>s+(+r.balance_due||0),0);
 
-  // Outstanding = net sum of ALL balance_due (INV + PAY rows).
-  const trueNet=Math.max(0, allRows.reduce((s,r)=>s+(+r.balance_due||0),0));
+  // Compute per-invoice true pending using tpLedger:
+  // Seed from INV row (bill - disc - cash - upi at invoice time),
+  // then subtract PAY rows via their reference_invoice field.
+  const tpLedger=new Map();
+  invRows.forEach(r=>{
+    tpLedger.set(r.reference_invoice_id,
+      Math.max(0,(+r.total_bill||0)-(+r.discount_amount||0)
+               -(+r.cash_received||0)-(+r.upi_received||0)));
+  });
+  payRows.forEach(r=>{
+    const ref=r.reference_invoice||'';
+    if(ref && tpLedger.has(ref)){
+      const paid=(+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0);
+      tpLedger.set(ref, Math.max(0, tpLedger.get(ref)-paid));
+    }
+  });
+  const trueNet=[...tpLedger.values()].reduce((s,v)=>s+v,0);
 
   // Summary chips
   document.getElementById('ledger-summary').innerHTML=`
@@ -1539,9 +1583,9 @@ function renderLedger(){
       ${trueNet>0.01?'⏳ Outstanding':'✅ Settled'}: ${fmtFull(trueNet)}
     </div>`;
 
-  // Pending invoices = INV rows where balance_due > 0
+  // Pending = invoices where tpLedger shows remaining balance > 0
   const pendInv=invRows
-    .map(r=>({...r,trueDue:Math.max(0,+r.balance_due||0)}))
+    .map(r=>({...r,trueDue:tpLedger.get(r.reference_invoice_id)||0}))
     .filter(r=>r.trueDue>0.01)
     .sort((a,b)=>(a.sale_date||'').localeCompare(b.sale_date||''));
 
