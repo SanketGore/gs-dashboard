@@ -323,7 +323,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
       <label>From</label><input type="date" id="f-from">
       <label>To</label><input type="date" id="f-to">
       <select id="f-period"><option value="Monthly">Monthly</option><option value="Daily">Daily</option><option value="Yearly">Yearly</option></select>
-      <select id="f-metric"><option value="revenue">Sales Revenue</option><option value="profit">Gross Profit</option></select>
+      <select id="f-metric"><option value="revenue">Sales Revenue</option><option value="profit">Gross Profit</option><option value="cashflow">Cash Collections</option></select>
       <!-- Location checkbox dropdown -->
       <div class="cd-wrap" id="cd-location">
         <button class="cd-btn" onclick="toggleCD('location')" id="cd-location-btn">
@@ -381,6 +381,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
     <div class="tab" onclick="switchTab('profitability',this)">📈 Profitability</div>
     <div class="tab" onclick="switchTab('receivables',this)">💳 Receivables</div>
     <div class="tab" onclick="switchTab('forecast',this)">🔮 Forecast</div>
+    <div class="tab" onclick="switchTab('insights',this)">💡 Insights</div>
   </div>
 
   <!-- ── TAB: Overview ───────────────────────────────── -->
@@ -552,6 +553,34 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
         </div>
         <button class="calc-run" onclick="runRestockCalc()">▶  Calculate Restock Order</button>
         <div id="restock-result"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TAB: Additional Insights ─────────────────────────────── -->
+  <div id="tab-insights" class="tab-content">
+    <div class="content">
+      <!-- Row 1: Stock Cover Days + Purchase vs Sales -->
+      <div class="chart-grid g-2 fade-in">
+        <div class="chart-card">
+          <div class="chart-title">📦 Stock Cover Days per Product</div>
+          <div class="chart-canvas-wrap" style="height:340px;"><canvas id="chart-stock-cover"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">🛒 Purchase Cost vs Sales Revenue</div>
+          <div class="chart-canvas-wrap" style="height:340px;"><canvas id="chart-purch-vs-sales"></canvas></div>
+        </div>
+      </div>
+      <!-- Row 2: Seasonal Demand Index -->
+      <div class="chart-grid g-1 fade-in" style="margin-top:12px;">
+        <div class="chart-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <div class="chart-title" style="margin-bottom:0;">🌡️ Seasonal Demand Index by Product</div>
+            <select id="seasonal-product" onchange="renderSeasonalIndex()" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:4px;font-family:inherit;"></select>
+          </div>
+          <div class="chart-canvas-wrap" style="height:260px;"><canvas id="chart-seasonal"></canvas></div>
+          <p class="forecast-note" style="margin-top:8px;">Index = monthly sales ÷ monthly average. Values above 1.0 indicate above-average demand for that month. Helps plan purchase timing.</p>
+        </div>
       </div>
     </div>
   </div>
@@ -1046,8 +1075,11 @@ function applyFilters(){
   const purchases=si.reduce((s,r)=>s+(+r.total_cost||0),0);
 
   const isProfit=f.metric==='profit';
+  const isCashflow=f.metric==='cashflow';
+  const ssAll2=DATA.sales_summary||[];
+  const totalCollected=ssAll2.reduce((s,r)=>s+(+r.cash_received||0)+(+r.upi_received||0),0);
   renderKPIs([
-    {icon:'💰',label:isProfit?'TOTAL GROSS PROFIT':'TOTAL REVENUE',value:fmt(isProfit?profit:revenue),color:C.blue},
+    {icon:'💰',label:isCashflow?'TOTAL COLLECTED':isProfit?'TOTAL GROSS PROFIT':'TOTAL REVENUE',value:fmt(isCashflow?totalCollected:isProfit?profit:revenue),color:C.blue},
     {icon:'📈',label:'GROSS PROFIT',value:fmt(profit),color:C.green},
     {icon:'⏳',label:'OUTSTANDING DUES',value:fmt(outstanding),color:C.orange},
     {icon:'📦',label:'STOCK VALUATION',value:fmt(stockVal),color:C.purple},
@@ -1086,6 +1118,10 @@ function renderTab(id){
     safeRender(()=>populateLedgerDropdown(),'ledger-dropdown');
   } else if(id==='forecast'){
     safeRender(()=>renderForecast(invOnly,f),'forecast');
+  } else if(id==='insights'){
+    safeRender(()=>renderStockCover(f),'stock-cover');
+    safeRender(()=>renderPurchVsSales(f),'purch-vs-sales');
+    safeRender(()=>populateSeasonalDropdown(),'seasonal-dropdown');
   }
 }
 
@@ -1104,19 +1140,36 @@ function renderKPIs(data){
 // OVERVIEW: Trend
 // ══════════════════════════════════════════════
 function renderTrend(so, invOnly, f){
-  const period=f.period, isProfit=f.metric==='profit';
-  const mainMap = isProfit
-    ? sumBy(so, r=>periodKey(r.sale_date,period), r=>(+r.total_sale||0)-(+r.buying_rate_at_time||0))
-    : sumBy(invOnly, r=>periodKey(r.sale_date,period), r=>+r.total_bill||0);
-  const cogsMap=sumBy(so,r=>periodKey(r.sale_date,period),r=>+r.buying_rate_at_time||0);
+  const period=f.period;
+  const isProfit=f.metric==='profit';
+  const isCashflow=f.metric==='cashflow';
+
+  // For cashflow mode: show Cash collected + UPI collected over time
+  // For this we need sales_summary (ss) not stock_out
+  const ss=window._ss||[];
+
+  let mainMap, cogsMap, mainLabel, mainColor, secondLabel;
+  if(isCashflow){
+    mainMap  = sumBy(ss, r=>periodKey(r.sale_date,period), r=>(+r.cash_received||0)+(+r.upi_received||0));
+    cogsMap  = sumBy(ss.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-')),
+                     r=>periodKey(r.sale_date,period), r=>+r.total_bill||0);
+    mainLabel='Cash Collections'; secondLabel='Amount Billed'; mainColor=C.teal;
+  } else if(isProfit){
+    mainMap   = sumBy(so, r=>periodKey(r.sale_date,period), r=>(+r.total_sale||0)-(+r.buying_rate_at_time||0));
+    cogsMap   = sumBy(so, r=>periodKey(r.sale_date,period), r=>+r.buying_rate_at_time||0);
+    mainLabel='Gross Profit'; secondLabel='COGS'; mainColor=C.green;
+  } else {
+    mainMap   = sumBy(invOnly, r=>periodKey(r.sale_date,period), r=>+r.total_bill||0);
+    cogsMap   = sumBy(so, r=>periodKey(r.sale_date,period), r=>+r.buying_rate_at_time||0);
+    mainLabel='Total Revenue'; secondLabel='COGS'; mainColor=C.blue;
+  }
   const keys=[...new Set([...Object.keys(mainMap),...Object.keys(cogsMap)])].filter(Boolean).sort();
   const mainVals=keys.map(k=>mainMap[k]||0);
   const cogsVals=keys.map(k=>cogsMap[k]||0);
   const labels=keys.map(k=>period==='Monthly'&&k.length===7?k.slice(5):k);
   const isDaily=period==='Daily';
-  const mainLabel=isProfit?'Gross Profit':'Total Revenue';
-  const mainColor=isProfit?C.green:C.blue;
-  document.getElementById('trend-title').textContent=mainLabel+' & COGS by '+period;
+  // mainColor already set above
+  document.getElementById('trend-title').textContent=mainLabel+' & '+secondLabel+' by '+period;
   destroyChart('trend');
   const c=ctx('chart-trend'); if(!c)return;
   charts.trend=new Chart(c,{
@@ -1126,8 +1179,8 @@ function renderTrend(so, invOnly, f){
         ? {label:mainLabel,data:mainVals,borderColor:mainColor,backgroundColor:mainColor+'33',fill:true,tension:0.3,pointRadius:3,borderWidth:2.5,order:1}
         : {label:mainLabel,data:mainVals,backgroundColor:mainColor+'cc',borderRadius:3,order:1},
       isDaily
-        ? {label:'COGS',data:cogsVals,borderColor:C.teal,backgroundColor:C.teal+'33',fill:true,tension:0.3,pointRadius:3,borderWidth:2.5,order:2}
-        : {label:'COGS',data:cogsVals,backgroundColor:C.teal+'cc',borderRadius:3,order:2},
+        ? {label:secondLabel,data:cogsVals,borderColor:C.orange,backgroundColor:C.orange+'33',fill:true,tension:0.3,pointRadius:3,borderWidth:2.5,order:2}
+        : {label:secondLabel,data:cogsVals,backgroundColor:C.orange+'cc',borderRadius:3,order:2},
     ]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{labels:{font:{size:11}}}},
@@ -1757,6 +1810,172 @@ function runRestockCalc(){
   }
 
   document.getElementById('restock-result').innerHTML=html;
+}
+
+
+// ══════════════════════════════════════════════
+// INSIGHTS: Stock Cover Days
+// ══════════════════════════════════════════════
+function renderStockCover(f){
+  destroyChart('stock-cover');
+  _clearNoDataMsg('chart-stock-cover');
+  const c=ctx('chart-stock-cover'); if(!c)return;
+  const so=DATA.stock_out||[];
+  const prods=DATA.products||[];
+
+  // Daily sales rate over the lookback (use date filter from f)
+  const filtSO=so.filter(r=>(!f.from||r.sale_date>=f.from)&&(!f.to||r.sale_date<=f.to));
+  const days=Math.max(1, f.from&&f.to
+    ? Math.round((new Date(f.to)-new Date(f.from))/86400000)+1
+    : 30);
+
+  const unitsSold={};
+  filtSO.forEach(r=>{ unitsSold[r.product_id]=(unitsSold[r.product_id]||0)+(+r.quantity||0); });
+
+  const rows=prods
+    .filter(p=>unitsSold[p.product_id]>0)
+    .map(p=>{
+      const rate=unitsSold[p.product_id]/days;
+      const cover=rate>0 ? Math.round((+p.current_stock||0)/rate) : 999;
+      return {name:(p.product_name||'').length>28?(p.product_name||'').slice(0,28)+'…':p.product_name, cover, stock:+p.current_stock||0};
+    })
+    .sort((a,b)=>a.cover-b.cover)
+    .slice(0,20);
+
+  if(!rows.length){_noDataMsg('chart-stock-cover','No sales data in selected period');return;}
+
+  const labels=rows.map(r=>r.name);
+  const values=rows.map(r=>Math.min(r.cover,90));
+  const colors=values.map(v=>v<=7?C.red+'cc':v<=14?C.orange+'cc':C.green+'cc');
+
+  charts['stock-cover']=new Chart(c,{type:'bar',
+    data:{labels,datasets:[{data:values,backgroundColor:colors,borderRadius:3}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:d=>{
+          const r=rows[d.dataIndex];
+          return r.cover>=90?'90+ days cover ('+r.stock+' units)':d.raw+' days cover ('+r.stock+' units)';
+        }}}},
+      scales:{
+        x:{max:90,ticks:{callback:v=>v+'d',font:{size:9}},grid:{color:'#f0f0f0'},
+          title:{display:true,text:'Days of stock remaining (capped at 90)',font:{size:9}}},
+        y:{ticks:{font:{size:9}},grid:{display:false}}
+      }}
+  });
+}
+
+// ══════════════════════════════════════════════
+// INSIGHTS: Purchase vs Sales Trend
+// ══════════════════════════════════════════════
+function renderPurchVsSales(f){
+  destroyChart('purch-vs-sales');
+  _clearNoDataMsg('chart-purch-vs-sales');
+  const c=ctx('chart-purch-vs-sales'); if(!c)return;
+  const period=f.period||'Monthly';
+  const invOnly=window._invOnly||[];
+  const si=DATA.stock_in||[];
+
+  const salesMap=sumBy(invOnly, r=>periodKey(r.sale_date,period), r=>+r.total_bill||0);
+  const purchMap=sumBy(
+    si.filter(r=>(!f.from||r.transaction_date>=f.from)&&(!f.to||r.transaction_date<=f.to)),
+    r=>periodKey(r.transaction_date,period), r=>+r.total_cost||0
+  );
+  const keys=[...new Set([...Object.keys(salesMap),...Object.keys(purchMap)])].filter(Boolean).sort();
+  if(!keys.length){_noDataMsg('chart-purch-vs-sales','No data in selected period');return;}
+
+  const labels=keys.map(k=>period==='Monthly'&&k.length===7?k.slice(5):k);
+  const isDaily=period==='Daily';
+
+  charts['purch-vs-sales']=new Chart(c,{type:isDaily?'line':'bar',
+    data:{labels,datasets:[
+      isDaily
+        ?{label:'Revenue',data:keys.map(k=>salesMap[k]||0),borderColor:C.blue,backgroundColor:C.blue+'33',fill:true,tension:0.3,pointRadius:3,borderWidth:2}
+        :{label:'Revenue',data:keys.map(k=>salesMap[k]||0),backgroundColor:C.blue+'cc',borderRadius:3},
+      isDaily
+        ?{label:'Purchases',data:keys.map(k=>purchMap[k]||0),borderColor:C.orange,backgroundColor:C.orange+'33',fill:true,tension:0.3,pointRadius:3,borderWidth:2}
+        :{label:'Purchases',data:keys.map(k=>purchMap[k]||0),backgroundColor:C.orange+'cc',borderRadius:3},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{font:{size:11}}}},
+      scales:{
+        y:{ticks:{callback:v=>fmt(v).replace('₹',''),font:{size:9}},grid:{color:'#f0f0f0'}},
+        x:{ticks:{font:{size:9},maxRotation:45},grid:{display:false}}
+      },interaction:{mode:'index',intersect:false}}
+  });
+}
+
+// ══════════════════════════════════════════════
+// INSIGHTS: Seasonal Demand Index
+// ══════════════════════════════════════════════
+function populateSeasonalDropdown(){
+  const so=DATA.stock_out||[];
+  const prods=[...new Set(so.map(r=>r.product_name).filter(Boolean))].sort();
+  const sel=document.getElementById('seasonal-product');
+  if(!sel) return;
+  const current=sel.value;
+  sel.innerHTML=prods.map(p=>`<option value="${p}">${p}</option>`).join('');
+  if(current&&prods.includes(current)) sel.value=current;
+  renderSeasonalIndex();
+}
+
+function renderSeasonalIndex(){
+  destroyChart('seasonal');
+  _clearNoDataMsg('chart-seasonal');
+  const c=ctx('chart-seasonal'); if(!c)return;
+  const sel=document.getElementById('seasonal-product');
+  if(!sel||!sel.value) return;
+  const prod=sel.value;
+  const so=(DATA.stock_out||[]).filter(r=>r.product_name===prod&&r.sale_date);
+
+  if(so.length<3){_noDataMsg('chart-seasonal','Not enough data for seasonal analysis');return;}
+
+  // Aggregate units by month-of-year across all years
+  const byYearMonth={};
+  so.forEach(r=>{
+    const ym=r.sale_date.slice(0,7);
+    byYearMonth[ym]=(byYearMonth[ym]||0)+(+r.quantity||0);
+  });
+  const monthlyVals=Object.values(byYearMonth);
+  const avg=monthlyVals.reduce((s,v)=>s+v,0)/monthlyVals.length;
+  if(avg===0){_noDataMsg('chart-seasonal','No sales data for this product');return;}
+
+  // Group by month number (1-12) and average across years
+  const byMonth=Array(12).fill(null).map(()=>[]);
+  Object.entries(byYearMonth).forEach(([ym,v])=>{
+    const m=parseInt(ym.slice(5))-1;
+    byMonth[m].push(v);
+  });
+  const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const indices=byMonth.map(arr=>{
+    if(!arr.length) return null;
+    const monthAvg=arr.reduce((s,v)=>s+v,0)/arr.length;
+    return Math.round((monthAvg/avg)*100)/100;
+  });
+  const hasData=indices.some(v=>v!==null);
+  if(!hasData){_noDataMsg('chart-seasonal','No data available');return;}
+
+  const colors=indices.map(v=>v===null?'#ddd':v>=1.2?C.green+'cc':v>=0.9?C.blue+'cc':C.orange+'cc');
+
+  charts.seasonal=new Chart(c,{type:'bar',
+    data:{labels:MONTHS,datasets:[{
+      label:'Seasonal Index',
+      data:indices,
+      backgroundColor:colors,
+      borderRadius:4,
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:d=>d.raw===null?'No data':'Index: '+d.raw+
+          (d.raw>=1.2?' ↑ High demand':d.raw>=0.9?' → Normal':' ↓ Low demand')}},
+        annotation:{},
+      },
+      scales:{
+        y:{min:0,ticks:{callback:v=>v+'x',font:{size:9}},grid:{color:'#f0f0f0'},
+          title:{display:true,text:'Index (1.0 = average month)',font:{size:9}}},
+        x:{ticks:{font:{size:10}},grid:{display:false}}
+      }}
+  });
 }
 
 </script>
