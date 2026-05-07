@@ -2066,57 +2066,132 @@ function buildSchemaBlock(){
   const si=DATA.stock_in||[], exp=DATA.expenses||[];
   const f=window._f||{};
 
-  const owedMap={};
-  ss.forEach(r=>{ owedMap[r.customer_name]=(owedMap[r.customer_name]||0)+(+r.balance_due||0); });
-  const owed=Object.entries(owedMap).filter(e=>e[1]>0.5).sort((a,b)=>b[1]-a[1]).slice(0,20)
-    .map(([n,v])=>'  '+n+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\n');
-
+  // ── helpers ──────────────────────────────────────────────
   const invSS=ss.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-'));
+  const paySS=ss.filter(r=> String(r.reference_invoice_id||'').startsWith('PAY-'));
+  const custLocMap={};
+  custs.forEach(c=>{ custLocMap[c.customer_name]=c.location||'Unknown'; });
+  const allDates=so.map(r=>r.sale_date).filter(Boolean).sort();
+  const dateRange=allDates.length?(f.from||allDates[0])+' to '+(f.to||allDates[allDates.length-1]):'All time';
+  const days=f.from&&f.to?Math.max(1,Math.round((new Date(f.to)-new Date(f.from))/86400000)+1):
+    allDates.length?Math.max(1,Math.round((new Date(allDates[allDates.length-1])-new Date(allDates[0]))/86400000)+1):90;
+
+  // ── financials ────────────────────────────────────────────
   const revenue=invSS.reduce((s,r)=>s+(+r.total_bill||0),0);
   const gp=so.reduce((s,r)=>s+((+r.total_sale||0)-(+r.buying_rate_at_time||0)),0);
   const collected=ss.reduce((s,r)=>s+(+r.cash_received||0)+(+r.upi_received||0),0);
 
-  const pRev={},pQty={};
-  so.forEach(r=>{pRev[r.product_name]=(pRev[r.product_name]||0)+(+r.total_sale||0);
-    pQty[r.product_name]=(pQty[r.product_name]||0)+(+r.quantity||0);});
-  const topRev=Object.entries(pRev).sort((a,b)=>b[1]-a[1]).slice(0,12)
-    .map(([n,v])=>'  '+n+': Rs'+Math.round(v/1000)+'K').join('\n');
+  // ── monthly revenue & GP breakdown (last 18 months) ───────
+  const mRev={}, mGP={}, mInvCount={};
+  invSS.forEach(r=>{
+    const m=r.sale_date?r.sale_date.slice(0,7):null; if(!m)return;
+    mRev[m]=(mRev[m]||0)+(+r.total_bill||0);
+    mInvCount[m]=(mInvCount[m]||0)+1;
+  });
+  so.forEach(r=>{
+    const m=r.sale_date?r.sale_date.slice(0,7):null; if(!m)return;
+    mGP[m]=(mGP[m]||0)+((+r.total_sale||0)-(+r.buying_rate_at_time||0));
+  });
+  const monthlyLines=Object.keys(mRev).sort().slice(-18)
+    .map(m=>'  '+m+': revenue=Rs'+Math.round(mRev[m]/1000)+'K'
+      +', gp=Rs'+Math.round((mGP[m]||0)/1000)+'K'
+      +', invoices='+mInvCount[m]).join('\n');
 
-  const days=f.from&&f.to?Math.max(1,Math.round((new Date(f.to)-new Date(f.from))/86400000)+1):90;
-  const stockLines=prods.map(p=>{
+  // ── outstanding dues + pending invoice list ───────────────
+  // tpLedger: compute true_pending per invoice via PAY rows
+  const tpLedger={};
+  invSS.forEach(r=>{ tpLedger[r.reference_invoice_id]=
+    Math.max(0,(+r.total_bill||0)-(+r.discount_amount||0)-(+r.cash_received||0)-(+r.upi_received||0)); });
+  paySS.forEach(r=>{
+    const ref=r.reference_invoice||''; if(ref&&tpLedger[ref]!==undefined){
+      const paid=(+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0);
+      tpLedger[ref]=Math.max(0,tpLedger[ref]-paid);
+    }
+  });
+  const owedMap={};
+  invSS.forEach(r=>{ const tp=tpLedger[r.reference_invoice_id]||0;
+    if(tp>0.5) owedMap[r.customer_name]=(owedMap[r.customer_name]||0)+tp; });
+  const owedLines=Object.entries(owedMap).sort((a,b)=>b[1]-a[1]).slice(0,20)
+    .map(([n,v])=>'  '+n+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\n');
+
+  // Pending invoices (all, sorted oldest first) — invoice ID, customer, date, amount due
+  const pendingInv=invSS
+    .filter(r=>(tpLedger[r.reference_invoice_id]||0)>0.5)
+    .sort((a,b)=>(a.sale_date||'').localeCompare(b.sale_date||''))
+    .map(r=>'  '+r.sale_date+' | '+r.reference_invoice_id+' | '+(r.physical_invoice_no||'-')
+      +' | '+r.customer_name+' | billed=Rs'+(r.total_bill||0)+' | due=Rs'+Math.round(tpLedger[r.reference_invoice_id]))
+    .join('\n');
+
+  // ── per-customer summary (top 30 by revenue) ─────────────
+  const custRev={}, custInvCount={}, custCollected={};
+  invSS.forEach(r=>{
+    custRev[r.customer_name]=(custRev[r.customer_name]||0)+(+r.total_bill||0);
+    custInvCount[r.customer_name]=(custInvCount[r.customer_name]||0)+1;
+  });
+  ss.forEach(r=>{ custCollected[r.customer_name]=(custCollected[r.customer_name]||0)
+    +(+r.cash_received||0)+(+r.upi_received||0); });
+  const custLines=Object.entries(custRev).sort((a,b)=>b[1]-a[1]).slice(0,30)
+    .map(([n,v])=>'  '+n+' ('+( custLocMap[n]||'?')+')'
+      +': revenue=Rs'+Math.round(v/1000)+'K'
+      +', invoices='+custInvCount[n]
+      +', avg=Rs'+Math.round(v/(custInvCount[n]||1))
+      +', collected=Rs'+Math.round((custCollected[n]||0)/1000)+'K'
+      +', owed=Rs'+Math.round(owedMap[n]||0)).join('\n');
+
+  // ── location summary with transaction counts ──────────────
+  const locRev={}, locInvCount={}, locCustCount={};
+  invSS.forEach(r=>{
+    const l=custLocMap[r.customer_name]||'Unknown';
+    locRev[l]=(locRev[l]||0)+(+r.total_bill||0);
+    locInvCount[l]=(locInvCount[l]||0)+1;
+  });
+  custs.forEach(c=>{ const l=c.location||'Unknown'; locCustCount[l]=(locCustCount[l]||0)+1; });
+  const locLines=Object.entries(locRev).sort((a,b)=>b[1]-a[1])
+    .map(([l,v])=>'  '+l+': revenue=Rs'+Math.round(v/1000)+'K'
+      +', invoices='+locInvCount[l]
+      +', avg=Rs'+Math.round(v/(locInvCount[l]||1))
+      +', customers='+(locCustCount[l]||0)).join('\n');
+
+  // ── products ──────────────────────────────────────────────
+  const pRev={},pQty={},pGP={};
+  so.forEach(r=>{
+    pRev[r.product_name]=(pRev[r.product_name]||0)+(+r.total_sale||0);
+    pQty[r.product_name]=(pQty[r.product_name]||0)+(+r.quantity||0);
+    pGP[r.product_name]=(pGP[r.product_name]||0)+((+r.total_sale||0)-(+r.buying_rate_at_time||0));
+  });
+  const prodLines=prods.map(p=>{
     const rate=(pQty[p.product_name]||0)/days;
     const cover=rate>0?Math.round((+p.current_stock||0)/rate):null;
-    return '  '+p.product_name+': stock='+p.current_stock+', pack='+p.pack_size
+    return '  '+p.product_name
+      +': stock='+p.current_stock
+      +', pack='+p.pack_size
+      +', sold='+Math.round(pQty[p.product_name]||0)+'units'
+      +', rev=Rs'+Math.round((pRev[p.product_name]||0)/1000)+'K'
       +(cover!==null?', cover~'+cover+'d':'');
-  }).join('\n');
+  }).sort((a,b)=>a.localeCompare(b)).join('\n');
 
-  const custLocMap={};
-  custs.forEach(c=>{ custLocMap[c.customer_name]=c.location||'Unknown'; });
-  const locRev={};
-  so.forEach(r=>{ const l=custLocMap[r.customer_name]||'Unknown'; locRev[l]=(locRev[l]||0)+(+r.total_sale||0); });
-  const topLoc=Object.entries(locRev).sort((a,b)=>b[1]-a[1])
-    .map(([l,v])=>'  '+l+': Rs'+Math.round(v/1000)+'K').join('\n');
-
+  // ── expenses ─────────────────────────────────────────────
   const expMap={};
   exp.forEach(r=>{ expMap[r.spent_on]=(expMap[r.spent_on]||0)+(+r.total_expense||0); });
   const expLines=Object.entries(expMap).sort((a,b)=>b[1]-a[1])
     .map(([k,v])=>'  '+k+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\n');
 
-  const allDates=so.map(r=>r.sale_date).filter(Boolean).sort();
-  const dateRange=allDates.length?(f.from||allDates[0])+' to '+(f.to||allDates[allDates.length-1]):'All time';
-
   return '=== GS AGENCIES DATA SNAPSHOT ===\n'
     +'Business: Pepsi distribution, Konkan/Sindhudurg, Maharashtra\n'
-    +'Date range: '+dateRange+' | Customers: '+custs.length+' | Products: '+prods.length+'\n'
-    +'Exported at: '+(DATA.exported_at||'unknown')+'\n\n'
+    +'Date range: '+dateRange+' ('+days+' days) | Customers: '+custs.length+' | Products: '+prods.length+'\n'
+    +'Total invoices: '+invSS.length+' | Payment rows: '+paySS.length+'\n'
+    +'Exported: '+(DATA.exported_at||'unknown')+'\n\n'
     +'--- FINANCIALS ---\n'
     +'Revenue: Rs'+Math.round(revenue/1000)+'K | GP: Rs'+Math.round(gp/1000)
-    +'K ('+Math.round(revenue>0?gp/revenue*100:0)+'%) | Collected: Rs'+Math.round(collected/1000)+'K\n\n'
-    +'--- OUTSTANDING DUES ---\n'+owed+'\n\n'
-    +'--- TOP PRODUCTS BY REVENUE ---\n'+topRev+'\n\n'
-    +'--- STOCK STATUS ---\n'+stockLines+'\n\n'
-    +'--- REVENUE BY LOCATION ---\n'+topLoc+'\n\n'
-    +'--- EXPENSES ---\n'+(expLines||'  No data');
+    +'K ('+Math.round(revenue>0?gp/revenue*100:0)+'%) | Collected: Rs'+Math.round(collected/1000)+'K\n'
+    +'Avg invoice value: Rs'+Math.round(revenue/(invSS.length||1))+'\n\n'
+    +'--- MONTHLY REVENUE & GP BREAKDOWN ---\n'+monthlyLines+'\n\n'
+    +'--- OUTSTANDING DUES BY CUSTOMER ---\n'+owedLines+'\n\n'
+    +'--- ALL PENDING INVOICES (date | invoice_id | phys# | customer | billed | due) ---\n'+pendingInv+'\n\n'
+    +'--- CUSTOMER SUMMARY (top 30 by revenue) ---\n'+custLines+'\n\n'
+    +'--- LOCATION SUMMARY ---\n'+locLines+'\n\n'
+    +'--- ALL PRODUCTS (name: stock, pack, units_sold, revenue, cover_days) ---\n'+prodLines+'\n\n'
+    +'--- EXPENSES BY CATEGORY ---\n'+(expLines||'  No data');
 }
 
 function _msg(role, text, cls){
