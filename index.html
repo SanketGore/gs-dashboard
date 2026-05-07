@@ -1978,6 +1978,177 @@ function renderSeasonalIndex(){
   });
 }
 
+// ══════════════════════════════════════════════════════════
+// GS BUSINESS ASSISTANT (DeepLearning.ai schema_block pattern)
+// ══════════════════════════════════════════════════════════
+
+const _GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions';
+const _GROQ_MODEL = 'llama-3.1-70b-versatile';
+let   _history    = [];
+
+function openAgent(){
+  document.getElementById('agent-overlay').style.display='block';
+  document.getElementById('agent-panel').classList.add('open');
+  const k=localStorage.getItem('gs_groq_key');
+  if(k) document.getElementById('ap-key').value=k;
+}
+function closeAgent(){
+  document.getElementById('agent-overlay').style.display='none';
+  document.getElementById('agent-panel').classList.remove('open');
+}
+function saveKey(){
+  const k=document.getElementById('ap-key').value.trim();
+  if(!k){alert('Enter a key first.');return;}
+  localStorage.setItem('gs_groq_key',k);
+  const b=document.getElementById('ap-save');
+  b.textContent='Saved ✓';b.style.background='var(--green)';
+  setTimeout(()=>{b.textContent='Save';b.style.background='';},1600);
+}
+function chip(el){ document.getElementById('ap-input').value=el.textContent; ask(); }
+
+function buildSchemaBlock(){
+  if(!DATA) return 'No data loaded.';
+  const so=DATA.stock_out||[], ss=DATA.sales_summary||[];
+  const prods=DATA.products||[], custs=DATA.customers||[];
+  const si=DATA.stock_in||[], exp=DATA.expenses||[];
+  const f=window._f||{};
+
+  const owedMap={};
+  ss.forEach(r=>{ owedMap[r.customer_name]=(owedMap[r.customer_name]||0)+(+r.balance_due||0); });
+  const owed=Object.entries(owedMap).filter(e=>e[1]>0.5).sort((a,b)=>b[1]-a[1]).slice(0,20)
+    .map(([n,v])=>'  '+n+': Rs'+Math.round(v).toLocaleString('en-IN')).join('
+');
+
+  const invSS=ss.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-'));
+  const revenue=invSS.reduce((s,r)=>s+(+r.total_bill||0),0);
+  const gp=so.reduce((s,r)=>s+((+r.total_sale||0)-(+r.buying_rate_at_time||0)),0);
+  const collected=ss.reduce((s,r)=>s+(+r.cash_received||0)+(+r.upi_received||0),0);
+
+  const pRev={},pQty={};
+  so.forEach(r=>{pRev[r.product_name]=(pRev[r.product_name]||0)+(+r.total_sale||0);
+    pQty[r.product_name]=(pQty[r.product_name]||0)+(+r.quantity||0);});
+  const topRev=Object.entries(pRev).sort((a,b)=>b[1]-a[1]).slice(0,12)
+    .map(([n,v])=>'  '+n+': Rs'+Math.round(v/1000)+'K').join('
+');
+
+  const days=f.from&&f.to?Math.max(1,Math.round((new Date(f.to)-new Date(f.from))/86400000)+1):90;
+  const stockLines=prods.map(p=>{
+    const rate=(pQty[p.product_name]||0)/days;
+    const cover=rate>0?Math.round((+p.current_stock||0)/rate):null;
+    return '  '+p.product_name+': stock='+p.current_stock+', pack='+p.pack_size
+      +(cover!==null?', cover~'+cover+'d':'');
+  }).join('
+');
+
+  const custLocMap={};
+  custs.forEach(c=>{ custLocMap[c.customer_name]=c.location||'Unknown'; });
+  const locRev={};
+  so.forEach(r=>{ const l=custLocMap[r.customer_name]||'Unknown'; locRev[l]=(locRev[l]||0)+(+r.total_sale||0); });
+  const topLoc=Object.entries(locRev).sort((a,b)=>b[1]-a[1])
+    .map(([l,v])=>'  '+l+': Rs'+Math.round(v/1000)+'K').join('
+');
+
+  const expMap={};
+  exp.forEach(r=>{ expMap[r.spent_on]=(expMap[r.spent_on]||0)+(+r.total_expense||0); });
+  const expLines=Object.entries(expMap).sort((a,b)=>b[1]-a[1])
+    .map(([k,v])=>'  '+k+': Rs'+Math.round(v).toLocaleString('en-IN')).join('
+');
+
+  const allDates=so.map(r=>r.sale_date).filter(Boolean).sort();
+  const dateRange=allDates.length?(f.from||allDates[0])+' to '+(f.to||allDates[allDates.length-1]):'All time';
+
+  return '=== GS AGENCIES DATA SNAPSHOT ===
+'
+    +'Business: Pepsi distribution, Konkan/Sindhudurg, Maharashtra
+'
+    +'Date range: '+dateRange+' | Customers: '+custs.length+' | Products: '+prods.length+'
+'
+    +'Exported at: '+(DATA.exported_at||'unknown')+'
+
+'
+    +'--- FINANCIALS ---
+'
+    +'Revenue: Rs'+Math.round(revenue/1000)+'K | GP: Rs'+Math.round(gp/1000)
+    +'K ('+Math.round(revenue>0?gp/revenue*100:0)+'%) | Collected: Rs'+Math.round(collected/1000)+'K
+
+'
+    +'--- OUTSTANDING DUES ---
+'+owed+'
+
+'
+    +'--- TOP PRODUCTS BY REVENUE ---
+'+topRev+'
+
+'
+    +'--- STOCK STATUS ---
+'+stockLines+'
+
+'
+    +'--- REVENUE BY LOCATION ---
+'+topLoc+'
+
+'
+    +'--- EXPENSES ---
+'+(expLines||'  No data');
+}
+
+function _msg(role, text, cls){
+  const box=document.getElementById('ap-msgs');
+  const el=document.createElement('div');
+  el.className='am '+role+(cls?' '+cls:'');
+  el.textContent=text;
+  box.appendChild(el);
+  box.scrollTop=box.scrollHeight;
+  return el;
+}
+
+async function ask(){
+  const inp=document.getElementById('ap-input');
+  const q=inp.value.trim(); if(!q) return;
+  const key=localStorage.getItem('gs_groq_key')||document.getElementById('ap-key').value.trim();
+  if(!key){_msg('ai','Add your free Groq key above first — get one at console.groq.com','err');return;}
+  if(!DATA){_msg('ai','No data loaded. Click Refresh first.','err');return;}
+  inp.value='';
+  document.getElementById('ap-send').disabled=true;
+  _msg('user',q);
+  const loader=_msg('ai','Thinking…','loading');
+  _history.push({role:'user',content:q});
+
+  const system='You are a senior business analyst for GS Agencies, a Pepsi distributor in Konkan/Sindhudurg, India.
+
+'
+    +'Use ONLY this data snapshot to answer:
+
+'+buildSchemaBlock()
+    +'
+
+Rules: Be concise. Use Rs for currency, K for thousands. '
+    +'Draft WhatsApp messages if asked. Say clearly if data is unavailable. '
+    +'Reply in the same language as the user (English/Hindi/Marathi).';
+
+  try{
+    const resp=await fetch(_GROQ_URL,{method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+      body:JSON.stringify({model:_GROQ_MODEL,max_tokens:700,temperature:0.2,
+        messages:[{role:'system',content:system},..._history.slice(-6)]})});
+    if(!resp.ok){
+      const e=await resp.json().catch(()=>({}));
+      loader.textContent='Error: '+(e?.error?.message||'HTTP '+resp.status);
+      loader.className='am ai err'; _history.pop();
+    } else {
+      const d=await resp.json();
+      const ans=d.choices?.[0]?.message?.content||'No response.';
+      loader.textContent=ans; loader.className='am ai';
+      _history.push({role:'assistant',content:ans});
+      if(_history.length>12) _history=_history.slice(-12);
+    }
+  }catch(e){
+    loader.textContent='Connection error: '+e.message;
+    loader.className='am ai err'; _history.pop();
+  }
+  document.getElementById('ap-send').disabled=false;
+}
+
 </script>
 </body>
 </html>
