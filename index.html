@@ -2016,8 +2016,7 @@ function buildSchemaBlock(){
   const owedMap={};
   ss.forEach(r=>{ owedMap[r.customer_name]=(owedMap[r.customer_name]||0)+(+r.balance_due||0); });
   const owed=Object.entries(owedMap).filter(e=>e[1]>0.5).sort((a,b)=>b[1]-a[1]).slice(0,20)
-    .map(([n,v])=>'  '+n+': Rs'+Math.round(v).toLocaleString('en-IN')).join('
-');
+    .map(([n,v])=>'  '+n+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\n');
 
   const invSS=ss.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-'));
   const revenue=invSS.reduce((s,r)=>s+(+r.total_bill||0),0);
@@ -2028,8 +2027,7 @@ function buildSchemaBlock(){
   so.forEach(r=>{pRev[r.product_name]=(pRev[r.product_name]||0)+(+r.total_sale||0);
     pQty[r.product_name]=(pQty[r.product_name]||0)+(+r.quantity||0);});
   const topRev=Object.entries(pRev).sort((a,b)=>b[1]-a[1]).slice(0,12)
-    .map(([n,v])=>'  '+n+': Rs'+Math.round(v/1000)+'K').join('
-');
+    .map(([n,v])=>'  '+n+': Rs'+Math.round(v/1000)+'K').join('\n');
 
   const days=f.from&&f.to?Math.max(1,Math.round((new Date(f.to)-new Date(f.from))/86400000)+1):90;
   const stockLines=prods.map(p=>{
@@ -2037,59 +2035,35 @@ function buildSchemaBlock(){
     const cover=rate>0?Math.round((+p.current_stock||0)/rate):null;
     return '  '+p.product_name+': stock='+p.current_stock+', pack='+p.pack_size
       +(cover!==null?', cover~'+cover+'d':'');
-  }).join('
-');
+  }).join('\n');
 
   const custLocMap={};
   custs.forEach(c=>{ custLocMap[c.customer_name]=c.location||'Unknown'; });
   const locRev={};
   so.forEach(r=>{ const l=custLocMap[r.customer_name]||'Unknown'; locRev[l]=(locRev[l]||0)+(+r.total_sale||0); });
   const topLoc=Object.entries(locRev).sort((a,b)=>b[1]-a[1])
-    .map(([l,v])=>'  '+l+': Rs'+Math.round(v/1000)+'K').join('
-');
+    .map(([l,v])=>'  '+l+': Rs'+Math.round(v/1000)+'K').join('\n');
 
   const expMap={};
   exp.forEach(r=>{ expMap[r.spent_on]=(expMap[r.spent_on]||0)+(+r.total_expense||0); });
   const expLines=Object.entries(expMap).sort((a,b)=>b[1]-a[1])
-    .map(([k,v])=>'  '+k+': Rs'+Math.round(v).toLocaleString('en-IN')).join('
-');
+    .map(([k,v])=>'  '+k+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\n');
 
   const allDates=so.map(r=>r.sale_date).filter(Boolean).sort();
   const dateRange=allDates.length?(f.from||allDates[0])+' to '+(f.to||allDates[allDates.length-1]):'All time';
 
-  return '=== GS AGENCIES DATA SNAPSHOT ===
-'
-    +'Business: Pepsi distribution, Konkan/Sindhudurg, Maharashtra
-'
-    +'Date range: '+dateRange+' | Customers: '+custs.length+' | Products: '+prods.length+'
-'
-    +'Exported at: '+(DATA.exported_at||'unknown')+'
-
-'
-    +'--- FINANCIALS ---
-'
+  return '=== GS AGENCIES DATA SNAPSHOT ===\n'
+    +'Business: Pepsi distribution, Konkan/Sindhudurg, Maharashtra\n'
+    +'Date range: '+dateRange+' | Customers: '+custs.length+' | Products: '+prods.length+'\n'
+    +'Exported at: '+(DATA.exported_at||'unknown')+'\n\n'
+    +'--- FINANCIALS ---\n'
     +'Revenue: Rs'+Math.round(revenue/1000)+'K | GP: Rs'+Math.round(gp/1000)
-    +'K ('+Math.round(revenue>0?gp/revenue*100:0)+'%) | Collected: Rs'+Math.round(collected/1000)+'K
-
-'
-    +'--- OUTSTANDING DUES ---
-'+owed+'
-
-'
-    +'--- TOP PRODUCTS BY REVENUE ---
-'+topRev+'
-
-'
-    +'--- STOCK STATUS ---
-'+stockLines+'
-
-'
-    +'--- REVENUE BY LOCATION ---
-'+topLoc+'
-
-'
-    +'--- EXPENSES ---
-'+(expLines||'  No data');
+    +'K ('+Math.round(revenue>0?gp/revenue*100:0)+'%) | Collected: Rs'+Math.round(collected/1000)+'K\n\n'
+    +'--- OUTSTANDING DUES ---\n'+owed+'\n\n'
+    +'--- TOP PRODUCTS BY REVENUE ---\n'+topRev+'\n\n'
+    +'--- STOCK STATUS ---\n'+stockLines+'\n\n'
+    +'--- REVENUE BY LOCATION ---\n'+topLoc+'\n\n'
+    +'--- EXPENSES ---\n'+(expLines||'  No data');
 }
 
 function _msg(role, text, cls){
@@ -2114,15 +2088,9 @@ async function ask(){
   const loader=_msg('ai','Thinking…','loading');
   _history.push({role:'user',content:q});
 
-  const system='You are a senior business analyst for GS Agencies, a Pepsi distributor in Konkan/Sindhudurg, India.
-
-'
-    +'Use ONLY this data snapshot to answer:
-
-'+buildSchemaBlock()
-    +'
-
-Rules: Be concise. Use Rs for currency, K for thousands. '
+  const system='You are a senior business analyst for GS Agencies, a Pepsi distributor in Konkan/Sindhudurg, India.\n\n'
+    +'Use ONLY this data snapshot to answer:\n\n'+buildSchemaBlock()
+    +'\n\nRules: Be concise. Use Rs for currency, K for thousands. '
     +'Draft WhatsApp messages if asked. Say clearly if data is unavailable. '
     +'Reply in the same language as the user (English/Hindi/Marathi).';
 
