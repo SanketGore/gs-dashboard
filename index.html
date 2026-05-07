@@ -265,6 +265,58 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .restock-total{margin-top:10px;padding:10px 14px;background:#eaf4fb;border-radius:5px;
   font-size:13px;font-weight:600;color:var(--accent);}
 @media(max-width:700px){.calc-form{grid-template-columns:1fr 1fr;}}
+
+/* ── AI Agent ─────────────────────────────────────────── */
+#agent-btn{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;
+  border:none;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;
+  cursor:pointer;display:flex;align-items:center;gap:5px;}
+#agent-btn:hover{opacity:.85;}
+#agent-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);
+  z-index:900;backdrop-filter:blur(2px);}
+#agent-panel{position:fixed;right:0;top:0;height:100%;width:390px;max-width:96vw;
+  background:var(--card);box-shadow:-4px 0 28px rgba(0,0,0,.14);
+  z-index:901;display:flex;flex-direction:column;
+  transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);}
+#agent-panel.open{transform:translateX(0);}
+.ap-head{padding:13px 16px;background:linear-gradient(135deg,#667eea,#764ba2);
+  color:#fff;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.ap-head h3{font-size:14px;font-weight:700;margin:0;}
+.ap-head small{font-size:10px;opacity:.8;}
+.ap-close{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;padding:0 2px;}
+.ap-setup{padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.ap-setup label{font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;
+  letter-spacing:.4px;display:block;margin-bottom:4px;}
+.ap-key-row{display:flex;gap:6px;margin-bottom:4px;}
+#ap-key{flex:1;padding:7px 10px;font-size:12px;font-family:inherit;
+  border:1px solid var(--border);border-radius:5px;background:#fafafa;color:var(--text);}
+#ap-save{padding:7px 12px;font-size:12px;font-weight:600;background:var(--blue);
+  color:#fff;border:none;border-radius:5px;cursor:pointer;white-space:nowrap;}
+.ap-hint{font-size:10px;color:var(--dim);}
+.ap-hint a{color:var(--blue);}
+.ap-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px;}
+.am{max-width:93%;padding:9px 12px;border-radius:10px;font-size:12px;line-height:1.6;
+  white-space:pre-wrap;word-break:break-word;}
+.am.user{background:linear-gradient(135deg,#667eea18,#764ba218);
+  border:1px solid #667eea33;align-self:flex-end;}
+.am.ai{background:var(--bg);border:1px solid var(--border);align-self:flex-start;}
+.am.loading{color:var(--dim);font-style:italic;}
+.am.err{background:#fde8e8;border:1px solid #f1a9a0;color:var(--red);}
+.ap-chips{padding:8px 12px;flex-shrink:0;border-top:1px solid var(--border);}
+.ap-chips p{font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;
+  letter-spacing:.4px;margin-bottom:5px;}
+.chip-row{display:flex;flex-wrap:wrap;gap:5px;}
+.sc{font-size:11px;padding:4px 9px;background:var(--bg);border:1px solid var(--border);
+  border-radius:12px;cursor:pointer;color:var(--accent);transition:all .12s;}
+.sc:hover{background:var(--blue);color:#fff;border-color:var(--blue);}
+.ap-bar{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--border);flex-shrink:0;}
+#ap-input{flex:1;padding:8px 10px;font-size:13px;font-family:inherit;
+  border:1px solid var(--border);border-radius:6px;resize:none;height:38px;
+  max-height:110px;overflow-y:auto;background:#fafafa;}
+#ap-input:focus{outline:none;border-color:#667eea;background:#fff;}
+#ap-send{padding:8px 16px;font-size:14px;background:linear-gradient(135deg,#667eea,#764ba2);
+  color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;}
+#ap-send:disabled{opacity:.45;cursor:not-allowed;}
+@media(max-width:480px){#agent-panel{width:100%;}}
 </style>
 </head>
 <body>
@@ -361,6 +413,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
       <button class="btn btn-blue btn-sm" onclick="applyFilters()">Apply</button>
       <button class="btn btn-outline btn-sm" onclick="showUpload()">📂 Data</button>
       <button class="btn btn-outline btn-sm" onclick="clearCacheAndReload()" title="Fetch latest data from GitHub">🔄 Refresh</button>
+      <button id="agent-btn" onclick="openAgent()">✨ Ask AI</button>
     </div>
   </div>
 
@@ -2118,5 +2171,41 @@ async function ask(){
 }
 
 </script>
+
+<!-- AI Agent Panel -->
+<div id="agent-overlay" onclick="closeAgent()"></div>
+<div id="agent-panel">
+  <div class="ap-head">
+    <div><h3>✨ GS Business Assistant</h3><small>Groq · Llama 3.1 · Free</small></div>
+    <button class="ap-close" onclick="closeAgent()">✕</button>
+  </div>
+  <div class="ap-setup">
+    <label>Groq API Key</label>
+    <div class="ap-key-row">
+      <input type="password" id="ap-key" placeholder="gsk_…" autocomplete="off">
+      <button id="ap-save" onclick="saveKey()">Save</button>
+    </div>
+    <p class="ap-hint">Free at <a href="https://console.groq.com" target="_blank">console.groq.com</a> · No credit card · 14,400 req/day</p>
+  </div>
+  <div class="ap-msgs" id="ap-msgs">
+    <div class="am ai">👋 Hi! I can answer questions about your sales, stock, customers and receivables. Add your free Groq key above to get started.</div>
+  </div>
+  <div class="ap-chips">
+    <p>Try asking</p>
+    <div class="chip-row">
+      <span class="sc" onclick="chip(this)">Who owes the most money?</span>
+      <span class="sc" onclick="chip(this)">Top 5 products by revenue</span>
+      <span class="sc" onclick="chip(this)">Which products are low on stock?</span>
+      <span class="sc" onclick="chip(this)">Summarise this month's sales</span>
+      <span class="sc" onclick="chip(this)">Which location buys the most?</span>
+      <span class="sc" onclick="chip(this)">Draft a payment reminder for [customer]</span>
+    </div>
+  </div>
+  <div class="ap-bar">
+    <textarea id="ap-input" placeholder="Ask anything about your business…"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ask();}"></textarea>
+    <button id="ap-send" onclick="ask()">➤</button>
+  </div>
+</div>
 </body>
 </html>
