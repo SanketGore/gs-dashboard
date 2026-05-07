@@ -2204,6 +2204,97 @@ function _msg(role, text, cls){
   return el;
 }
 
+// ── DATA SCHEMA for code-generation prompt ────────────────
+// Describes the structure of the global DATA object so the LLM
+// can write correct JS to query it.
+function dataSchema(){
+  return `DATA object structure (read-only, already loaded in browser):
+
+DATA.stock_out[]       — one row per product line on each invoice
+  .sale_date           string "YYYY-MM-DD"
+  .invoice_id          string e.g. "INV-260101-417"
+  .customer_name       string
+  .product_name        string
+  .product_id          string
+  .quantity            number (units sold)
+  .unit_price          number
+  .total_sale          number (revenue for this line)
+  .buying_rate_at_time number (cost for this line)
+
+DATA.sales_summary[]   — one row per invoice header or payment
+  .reference_invoice_id  string — own ID (INV-/SYS- for invoices, PAY- for payments)
+  .reference_invoice     string — for PAY rows: the invoice_id being settled
+  .sale_date             string "YYYY-MM-DD"
+  .customer_name         string
+  .total_bill            number
+  .discount_amount       number
+  .cash_received         number
+  .upi_received          number
+  .total_received        number
+  .balance_due           number (may be stale; use tpLedger pattern for accuracy)
+  .physical_invoice_no   string
+
+DATA.products[]
+  .product_id  .product_name  .current_stock  .pack_size
+  .cost_price_unit  .selling_price_unit  .pack_cost
+
+DATA.customers[]
+  .customer_name  .location  .contact
+
+DATA.stock_in[]
+  .transaction_date  .product_id  .quantity  .unit_cost  .total_cost
+
+DATA.expenses[]
+  .expense_date  .spent_on  .cash_expense  .online_expense  .total_expense
+
+Useful patterns:
+  // location of a customer
+  const locMap={}; DATA.customers.forEach(c=>locMap[c.customer_name]=c.location||'Unknown');
+  // gross profit per line
+  const gp = r.total_sale - r.buying_rate_at_time;
+  // pending per invoice (tpLedger)
+  const tp={}; invRows.forEach(r=>{ tp[r.reference_invoice_id]=Math.max(0,(r.total_bill||0)-(r.discount_amount||0)-(r.cash_received||0)-(r.upi_received||0)); });
+  payRows.forEach(r=>{ const ref=r.reference_invoice; if(ref&&tp[ref]!==undefined) tp[ref]=Math.max(0,tp[ref]-((r.cash_received||0)+(r.upi_received||0)+(r.discount_amount||0))); });`;
+}
+
+// ── Safe JS sandbox execution ─────────────────────────────
+// Executes LLM-generated code with DATA available.
+// Returns { result, error } — never throws.
+function sandboxExec(code){
+  try{
+    const fn=new Function('DATA','custLocMap',
+      '"use strict";\n'+code);
+    const locMap={};
+    DATA.customers.forEach(c=>{ locMap[c.customer_name]=c.location||'Unknown'; });
+    const result=fn(DATA, locMap);
+    // Serialize result sensibly
+    if(result===undefined) return {result:'(no return value — code ran without errors)'};
+    if(typeof result==='object') return {result:JSON.stringify(result,null,2)};
+    return {result:String(result)};
+  }catch(e){
+    return {error:e.message};
+  }
+}
+
+// ── Extract <execute_js>...</execute_js> block ────────────
+function extractCode(text){
+  const m=text.match(/<execute_js>([\s\S]*?)<\/execute_js>/i);
+  return m?m[1].trim():null;
+}
+
+// ── Groq API call helper ──────────────────────────────────
+async function groqCall(messages, key, maxTokens=800, temp=0.1){
+  const resp=await fetch(_GROQ_URL,{method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+    body:JSON.stringify({model:_GROQ_MODEL,max_tokens:maxTokens,temperature:temp,messages})});
+  if(!resp.ok){const e=await resp.json().catch(()=>({})); throw new Error(e?.error?.message||'HTTP '+resp.status);}
+  const d=await resp.json();
+  return d.choices?.[0]?.message?.content||'';
+}
+
+// ── Main ask() — two-step agent loop ─────────────────────
+// Step 1: LLM decides whether to write code or answer directly.
+// Step 2: If code, execute it and feed result back for final answer.
 async function ask(){
   const inp=document.getElementById('ap-input');
   const q=inp.value.trim(); if(!q) return;
@@ -2216,30 +2307,93 @@ async function ask(){
   const loader=_msg('ai','Thinking…','loading');
   _history.push({role:'user',content:q});
 
-  const system='You are a senior business analyst for GS Agencies, a Pepsi distributor in Konkan/Sindhudurg, India.\n\n'
-    +'Use ONLY this data snapshot to answer:\n\n'+buildSchemaBlock()
-    +'\n\nRules: Be concise. Use Rs for currency, K for thousands. '
-    +'Draft WhatsApp messages if asked. Say clearly if data is unavailable. '
-    +'Reply in the same language as the user (English/Hindi/Marathi).';
+  const codeSystemPrompt=`You are a data analyst assistant for GS Agencies, a Pepsi distributor in Konkan/Sindhudurg, India.
+You have access to the business data via the JavaScript DATA object described below.
+
+${dataSchema()}
+
+INSTRUCTIONS:
+- For ANY question that requires querying, filtering, aggregating or computing over the data, write JavaScript code to compute the answer.
+- Wrap your code in <execute_js>...</execute_js> tags.
+- The code runs in a browser sandbox with DATA and custLocMap (location lookup map) available.
+- Your code MUST return a value (use "return ...") — it is wrapped in a function.
+- Keep code concise. No console.log. Return a string, number, array, or plain object.
+- For simple conversational questions (greetings, explanations, draft messages) answer directly WITHOUT code.
+- After seeing code results you will be asked to give a plain English answer.
+
+EXAMPLES:
+Q: "Highest sale location in April 2026"
+<execute_js>
+const rows=DATA.stock_out.filter(r=>r.sale_date&&r.sale_date.startsWith('2026-04'));
+const m={};
+rows.forEach(r=>{ const l=custLocMap[r.customer_name]||'Unknown'; m[l]=(m[l]||0)+(+r.total_sale||0); });
+const sorted=Object.entries(m).sort((a,b)=>b[1]-a[1]);
+return sorted.map(([l,v])=>l+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\n');
+</execute_js>
+
+Q: "Pending invoices for Malvani Days"
+<execute_js>
+const ss=DATA.sales_summary;
+const inv=ss.filter(r=>r.customer_name==='Malvani Days'&&!String(r.reference_invoice_id||'').startsWith('PAY-'));
+const pay=ss.filter(r=>r.customer_name==='Malvani Days'&&String(r.reference_invoice_id||'').startsWith('PAY-'));
+const tp={};
+inv.forEach(r=>{ tp[r.reference_invoice_id]=Math.max(0,(+r.total_bill||0)-(+r.discount_amount||0)-(+r.cash_received||0)-(+r.upi_received||0)); });
+pay.forEach(r=>{ const ref=r.reference_invoice||''; if(ref&&tp[ref]!==undefined) tp[ref]=Math.max(0,tp[ref]-((+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0))); });
+const pending=inv.filter(r=>tp[r.reference_invoice_id]>0.5);
+return pending.map(r=>r.sale_date+' | '+r.reference_invoice_id+' | billed Rs'+r.total_bill+' | due Rs'+Math.round(tp[r.reference_invoice_id])).join('\n');
+</execute_js>`;
 
   try{
-    const resp=await fetch(_GROQ_URL,{method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model:_GROQ_MODEL,max_tokens:700,temperature:0.2,
-        messages:[{role:'system',content:system},..._history.slice(-6)]})});
-    if(!resp.ok){
-      const e=await resp.json().catch(()=>({}));
-      loader.textContent='Error: '+(e?.error?.message||'HTTP '+resp.status);
-      loader.className='am ai err'; _history.pop();
+    // ── Step 1: ask LLM to generate code or answer ────────
+    loader.textContent='Analysing question…';
+    const step1=await groqCall([
+      {role:'system',content:codeSystemPrompt},
+      ..._history.slice(-6)
+    ], key, 900, 0.1);
+
+    const code=extractCode(step1);
+
+    if(!code){
+      // LLM answered directly (greeting, draft message etc.)
+      loader.textContent=step1; loader.className='am ai';
+      _history.push({role:'assistant',content:step1});
     } else {
-      const d=await resp.json();
-      const ans=d.choices?.[0]?.message?.content||'No response.';
-      loader.textContent=ans; loader.className='am ai';
-      _history.push({role:'assistant',content:ans});
-      if(_history.length>12) _history=_history.slice(-12);
+      // ── Step 2: execute code + get plain English answer ──
+      loader.textContent='Running query…';
+      const {result, error}=sandboxExec(code);
+
+      let finalAnswer;
+      if(error){
+        // Code errored — tell LLM to try again or answer differently
+        const retry=await groqCall([
+          {role:'system',content:codeSystemPrompt},
+          ..._history.slice(-6),
+          {role:'assistant',content:step1},
+          {role:'user',content:'The code produced an error: '+error+'. Please fix the code or answer without code.'}
+        ], key, 900, 0.1);
+        const code2=extractCode(retry);
+        if(code2){
+          const {result:r2, error:e2}=sandboxExec(code2);
+          finalAnswer=e2?('Code error: '+e2):r2;
+        } else { finalAnswer=retry; }
+      } else {
+        // Feed result to LLM for plain English answer
+        loader.textContent='Interpreting results…';
+        finalAnswer=await groqCall([
+          {role:'system',
+           content:'You are a business analyst for GS Agencies. Convert the following raw query result into a clear, concise answer in plain English. Use Rs for currency. Be brief and direct. Reply in the same language as the original question.'},
+          {role:'user', content:'Original question: '+q+'\n\nQuery result:\n'+result}
+        ], key, 500, 0.2);
+      }
+
+      loader.textContent=finalAnswer; loader.className='am ai';
+      _history.push({role:'assistant',content:finalAnswer});
     }
+
+    if(_history.length>12) _history=_history.slice(-12);
+
   }catch(e){
-    loader.textContent='Connection error: '+e.message;
+    loader.textContent='Error: '+e.message;
     loader.className='am ai err'; _history.pop();
   }
   document.getElementById('ap-send').disabled=false;
