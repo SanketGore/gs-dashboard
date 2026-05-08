@@ -273,13 +273,13 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 #agent-panel.open{transform:translateX(0);}
 .ap-head{padding:13px 16px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
 .ap-head h3{font-size:14px;font-weight:700;margin:0;}.ap-head small{font-size:10px;opacity:.8;}
-.ap-close{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;padding:0 2px;}
+.ap-close{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;}
 .ap-setup{padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
 .ap-setup label{font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;}
 .ap-key-row{display:flex;gap:6px;margin-bottom:4px;}
 #ap-key{flex:1;padding:7px 10px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;color:var(--text);}
 #ap-save{padding:7px 12px;font-size:12px;font-weight:600;background:var(--blue);color:#fff;border:none;border-radius:5px;cursor:pointer;}
-.ap-hint{font-size:10px;color:var(--dim);}.ap-hint a{color:var(--blue);}
+.ap-hint{font-size:10px;color:var(--dim);margin-top:3px;}.ap-hint a{color:var(--blue);}
 .ap-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px;}
 .am{max-width:93%;padding:9px 12px;border-radius:10px;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;}
 .am.user{background:linear-gradient(135deg,#667eea18,#764ba218);border:1px solid #667eea33;align-self:flex-end;}
@@ -289,7 +289,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .ap-chips{padding:8px 12px;flex-shrink:0;border-top:1px solid var(--border);}
 .ap-chips p{font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;}
 .chip-row{display:flex;flex-wrap:wrap;gap:5px;}
-.sc{font-size:11px;padding:4px 9px;background:var(--bg);border:1px solid var(--border);border-radius:12px;cursor:pointer;color:var(--accent);transition:all .12s;}
+.sc{font-size:11px;padding:4px 9px;background:var(--bg);border:1px solid var(--border);border-radius:12px;cursor:pointer;color:var(--accent);}
 .sc:hover{background:var(--blue);color:#fff;border-color:var(--blue);}
 .ap-bar{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--border);flex-shrink:0;}
 #ap-input{flex:1;padding:8px 10px;font-size:13px;font-family:inherit;border:1px solid var(--border);border-radius:6px;resize:none;height:38px;max-height:110px;overflow-y:auto;background:#fafafa;}
@@ -2011,36 +2011,75 @@ function renderSeasonalIndex(){
   });
 }
 
+
+const _PROVIDERS={
+  groq:{models:[{id:'llama-3.3-70b-versatile',label:'Llama 3.3 70B'},{id:'llama-4-scout-17b-16e-instruct',label:'Llama 4 Scout 17B'},{id:'llama-3.1-8b-instant',label:'Llama 3.1 8B'}],keyStore:'gs_groq_key',keyPlaceholder:'gsk_...',keyLabel:'Groq API Key',hint:'Free at <a href="https://console.groq.com" target="_blank">console.groq.com</a> &middot; 14,400 req/day',
+    call:async(msgs,key,model,maxTok)=>{const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model,max_tokens:maxTok,temperature:0.1,messages:msgs})});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e?.error?.message||'HTTP '+r.status);}return(await r.json()).choices?.[0]?.message?.content||'';}}
+,  gemini:{models:[{id:'gemini-2.5-flash',label:'Gemini 2.5 Flash (250/day)'},{id:'gemini-2.5-flash-lite',label:'Gemini 2.5 Flash-Lite (1000/day)'},{id:'gemini-2.5-pro',label:'Gemini 2.5 Pro (100/day)'}],keyStore:'gs_gemini_key',keyPlaceholder:'AIza...',keyLabel:'Google AI Studio Key',hint:'Free at <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a>',
+    call:async(msgs,key,model,maxTok)=>{const sys=msgs.find(m=>m.role==='system');const turns=msgs.filter(m=>m.role!=='system').map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}));const body={contents:turns,generationConfig:{maxOutputTokens:maxTok,temperature:0.1}};if(sys)body.systemInstruction={parts:[{text:sys.content}]};const url='https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+key;const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e?.error?.message||'HTTP '+r.status);}return(await r.json()).candidates?.[0]?.content?.parts?.[0]?.text||'';}}
+};
+let _history=[],_currentProvider='groq';
+function _prov(){return _PROVIDERS[_currentProvider];}
+function _getModel(){return document.getElementById('ap-model')?.value||_prov().models[0].id;}
+function _getKey(){return localStorage.getItem(_prov().keyStore)||document.getElementById('ap-key')?.value.trim()||'';}
+function onProviderChange(){const p=document.getElementById('ap-provider').value;_currentProvider=p;const pv=_PROVIDERS[p];document.getElementById('ap-model').innerHTML=pv.models.map(m=>`<option value="${m.id}">${m.label}</option>`).join('');document.getElementById('ap-key-label').textContent=pv.keyLabel;document.getElementById('ap-key').placeholder=pv.keyPlaceholder;document.getElementById('ap-hint').innerHTML=pv.hint;document.getElementById('ap-key').value=localStorage.getItem(pv.keyStore)||'';onModelChange();}
+function onModelChange(){const p=_PROVIDERS[_currentProvider];const m=p.models.find(x=>x.id===_getModel())||p.models[0];const lbl=document.getElementById('ap-model-label');if(lbl)lbl.textContent=(_currentProvider==='groq'?'Groq':'Gemini')+' · '+m.label;}
+function openAgent(){document.getElementById('agent-overlay').style.display='block';document.getElementById('agent-panel').classList.add('open');const lp=localStorage.getItem('gs_last_provider')||'groq';document.getElementById('ap-provider').value=lp;onProviderChange();}
+function closeAgent(){document.getElementById('agent-overlay').style.display='none';document.getElementById('agent-panel').classList.remove('open');}
+function saveKey(){const k=document.getElementById('ap-key').value.trim();if(!k){alert('Enter a key.');return;}localStorage.setItem(_prov().keyStore,k);localStorage.setItem('gs_last_provider',_currentProvider);const b=document.getElementById('ap-save');b.textContent='Saved';b.style.background='var(--green)';setTimeout(()=>{b.textContent='Save';b.style.background='';},1600);}
+function chip(el){document.getElementById('ap-input').value=el.textContent;ask();}
+function buildSchemaBlock(){if(!DATA)return'No data loaded.';const so=DATA.stock_out||[],ss=DATA.sales_summary||[],prods=DATA.products||[],custs=DATA.customers||[],exp=DATA.expenses||[],f=window._f||{};const invSS=ss.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-'));const paySS=ss.filter(r=>String(r.reference_invoice_id||'').startsWith('PAY-'));const cl={};custs.forEach(c=>{cl[c.customer_name]=c.location||'Unknown';});const allDates=so.map(r=>r.sale_date).filter(Boolean).sort();const days=f.from&&f.to?Math.max(1,Math.round((new Date(f.to)-new Date(f.from))/86400000)+1):allDates.length?Math.max(1,Math.round((new Date(allDates[allDates.length-1])-new Date(allDates[0]))/86400000)+1):90;const rev=invSS.reduce((s,r)=>s+(+r.total_bill||0),0);const gp=so.reduce((s,r)=>s+((+r.total_sale||0)-(+r.buying_rate_at_time||0)),0);const coll=ss.reduce((s,r)=>s+(+r.cash_received||0)+(+r.upi_received||0),0);const mRev={},mGP={},mInv={};invSS.forEach(r=>{const m=r.sale_date?.slice(0,7);if(!m)return;mRev[m]=(mRev[m]||0)+(+r.total_bill||0);mInv[m]=(mInv[m]||0)+1;});so.forEach(r=>{const m=r.sale_date?.slice(0,7);if(!m)return;mGP[m]=(mGP[m]||0)+((+r.total_sale||0)-(+r.buying_rate_at_time||0));});const mLines=Object.keys(mRev).sort().slice(-18).map(m=>'  '+m+': rev=Rs'+Math.round(mRev[m]/1000)+'K gp=Rs'+Math.round((mGP[m]||0)/1000)+'K inv='+mInv[m]).join('\n');const tp={};invSS.forEach(r=>{tp[r.reference_invoice_id]=Math.max(0,(+r.total_bill||0)-(+r.discount_amount||0)-(+r.cash_received||0)-(+r.upi_received||0));});paySS.forEach(r=>{const ref=r.reference_invoice||'';if(ref&&tp[ref]!==undefined)tp[ref]=Math.max(0,tp[ref]-((+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0)));});const owedMap={};invSS.forEach(r=>{const v=tp[r.reference_invoice_id]||0;if(v>0.5)owedMap[r.customer_name]=(owedMap[r.customer_name]||0)+v;});const owedLines=Object.entries(owedMap).sort((a,b)=>b[1]-a[1]).slice(0,20).map(([n,v])=>'  '+n+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\n');const pRev={},pQty={};so.forEach(r=>{pRev[r.product_name]=(pRev[r.product_name]||0)+(+r.total_sale||0);pQty[r.product_name]=(pQty[r.product_name]||0)+(+r.quantity||0);});const prodLines=prods.map(p=>{const rate=(pQty[p.product_name]||0)/days;const cv=rate>0?Math.round((+p.current_stock||0)/rate):null;return'  '+p.product_name+': stock='+p.current_stock+' pack='+p.pack_size+(cv!==null?' cover~'+cv+'d':'');}).join('\n');const locRev={},locInv={};invSS.forEach(r=>{const l=cl[r.customer_name]||'Unknown';locRev[l]=(locRev[l]||0)+(+r.total_bill||0);locInv[l]=(locInv[l]||0)+1;});const locLines=Object.entries(locRev).sort((a,b)=>b[1]-a[1]).map(([l,v])=>'  '+l+': Rs'+Math.round(v/1000)+'K inv='+locInv[l]).join('\n');const expMap={};exp.forEach(r=>{expMap[r.spent_on]=(expMap[r.spent_on]||0)+(+r.total_expense||0);});const expLines=Object.entries(expMap).sort((a,b)=>b[1]-a[1]).map(([k,v])=>'  '+k+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\n');const dr=allDates.length?(f.from||allDates[0])+' to '+(f.to||allDates[allDates.length-1]):'All time';return'=== GS AGENCIES SNAPSHOT ===\nDate: '+dr+' | Customers: '+custs.length+' | Products: '+prods.length+'\nRevenue: Rs'+Math.round(rev/1000)+'K | GP: Rs'+Math.round(gp/1000)+'K | Collected: Rs'+Math.round(coll/1000)+'K\n\n--- MONTHLY ---\n'+mLines+'\n\n--- OUTSTANDING ---\n'+owedLines+'\n\n--- LOCATIONS ---\n'+locLines+'\n\n--- PRODUCTS ---\n'+prodLines+'\n\n--- EXPENSES ---\n'+(expLines||'  None');}
+function dataSchema(){return 'DATA.stock_out[]: sale_date,invoice_id,customer_name,product_name,quantity,total_sale,buying_rate_at_time\nDATA.sales_summary[]: reference_invoice_id,reference_invoice,sale_date,customer_name,total_bill,discount_amount,cash_received,upi_received,balance_due\nDATA.products[]: product_name,current_stock,pack_size\nDATA.customers[]: customer_name,location\nDATA.stock_in[]: transaction_date,product_id,quantity,unit_cost,total_cost\nDATA.expenses[]: expense_date,spent_on,total_expense\ncustLocMap: const cl={}; DATA.customers.forEach(c=>cl[c.customer_name]=c.location||"Unknown");';}
+function sandboxExec(code){try{const fn=new Function('DATA','custLocMap','"use strict";\n'+code);const cl={};DATA.customers.forEach(c=>{cl[c.customer_name]=c.location||'Unknown';});const r=fn(DATA,cl);if(r===undefined)return{result:'(no return)'};if(typeof r==='object')return{result:JSON.stringify(r,null,2)};return{result:String(r)};}catch(e){return{error:e.message};}}
+function extractCode(t){const m=t.match(/<execute_js>([\s\S]*?)<\/execute_js>/i);return m?m[1].trim():null;}
+function _msg(role,text,cls){const box=document.getElementById('ap-msgs');const el=document.createElement('div');el.className='am '+role+(cls?' '+cls:'');el.textContent=text;box.appendChild(el);box.scrollTop=box.scrollHeight;return el;}
+async function ask(){
+  const inp=document.getElementById('ap-input');const q=inp.value.trim();if(!q)return;
+  const key=_getKey();
+  if(!key){_msg('ai','Please add your '+_prov().keyLabel+' above first.','err');return;}
+  if(!DATA){_msg('ai','No data loaded. Click Refresh first.','err');return;}
+  inp.value='';document.getElementById('ap-send').disabled=true;
+  _msg('user',q);const loader=_msg('ai','Thinking...','loading');
+  _history.push({role:'user',content:q});
+  const codeSys='You are a data analyst for GS Agencies, Pepsi distributor in Konkan/Sindhudurg.\n\nDATA SCHEMA:\n'+dataSchema()+'\n\nCONTEXT:\n'+buildSchemaBlock()+'\n\nFor ANY computational question write JS in <execute_js>...</execute_js>. Code has DATA and custLocMap. Must use return. For greetings/messages answer directly.\n\nExample:\n<execute_js>\nconst rows=DATA.stock_out.filter(r=>r.sale_date&&r.sale_date.startsWith("2026-04"));\nconst m={};rows.forEach(r=>{const l=custLocMap[r.customer_name]||"Unknown";m[l]=(m[l]||0)+(+r.total_sale||0);});\nreturn Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([l,v])=>l+": Rs"+Math.round(v).toLocaleString("en-IN")).join("\\n");\n</execute_js>';
+  try{
+    loader.textContent='Analysing...';
+    const step1=await _prov().call([{role:'system',content:codeSys},..._history.slice(-6)],key,_getModel(),900);
+    const code=extractCode(step1);
+    if(!code){
+      loader.textContent=step1;loader.className='am ai';_history.push({role:'assistant',content:step1});
+    } else {
+      loader.textContent='Running query...';
+      const {result,error}=sandboxExec(code);
+      let ans;
+      if(error){
+        const retry=await _prov().call([{role:'system',content:codeSys},..._history.slice(-6),{role:'assistant',content:step1},{role:'user',content:'Code error: '+error+'. Fix or answer without code.'}],key,_getModel(),900);
+        const c2=extractCode(retry);if(c2){const{result:r2,error:e2}=sandboxExec(c2);ans=e2?'Error: '+e2:r2;}else ans=retry;
+      } else {
+        loader.textContent='Interpreting...';
+        ans=await _prov().call([{role:'system',content:'Business analyst for GS Agencies. Convert raw data result to clear plain-English answer. Use Rs for currency. Reply in same language as user.'},{role:'user',content:'Question: '+q+'\n\nResult:\n'+result}],key,_getModel(),500);
+      }
+      loader.textContent=ans;loader.className='am ai';_history.push({role:'assistant',content:ans});
+    }
+    if(_history.length>12)_history=_history.slice(-12);
+  }catch(e){loader.textContent='Error: '+e.message;loader.className='am ai err';_history.pop();}
+  document.getElementById('ap-send').disabled=false;
+}
 </script>
 <!-- AI Agent -->
 <div id="agent-overlay" onclick="closeAgent()"></div>
 <div id="agent-panel">
-  <div class="ap-head">
-    <div><h3>&#x2728; GS Business Assistant</h3><small id="ap-model-label">Groq &middot; Llama 3.3 70B</small></div>
-    <button class="ap-close" onclick="closeAgent()">&#x2715;</button>
-  </div>
+  <div class="ap-head"><div><h3>&#x2728; GS Business Assistant</h3><small id="ap-model-label">Groq &middot; Llama 3.3 70B</small></div><button class="ap-close" onclick="closeAgent()">&#x2715;</button></div>
   <div class="ap-setup">
     <div style="display:flex;gap:6px;margin-bottom:8px;">
-      <div style="flex:1;"><label>Provider</label>
-        <select id="ap-provider" onchange="onProviderChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;">
-          <option value="groq">Groq (14,400/day)</option>
-          <option value="gemini">Google Gemini</option>
-        </select></div>
-      <div style="flex:1;"><label>Model</label>
-        <select id="ap-model" onchange="onModelChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;">
-          <option value="llama-3.3-70b-versatile">Llama 3.3 70B &#x2605;</option>
-          <option value="llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B</option>
-          <option value="llama-3.1-8b-instant">Llama 3.1 8B</option>
-        </select></div>
+      <div style="flex:1;"><label>Provider</label><select id="ap-provider" onchange="onProviderChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;"><option value="groq">Groq (14,400/day)</option><option value="gemini">Google Gemini</option></select></div>
+      <div style="flex:1;"><label>Model</label><select id="ap-model" onchange="onModelChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;"><option value="llama-3.3-70b-versatile">Llama 3.3 70B &#x2605;</option><option value="llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B</option><option value="llama-3.1-8b-instant">Llama 3.1 8B</option></select></div>
     </div>
     <label id="ap-key-label">Groq API Key</label>
-    <div class="ap-key-row" style="margin-top:3px;">
-      <input type="password" id="ap-key" placeholder="gsk_..." autocomplete="off">
-      <button id="ap-save" onclick="saveKey()">Save</button>
-    </div>
+    <div class="ap-key-row" style="margin-top:3px;"><input type="password" id="ap-key" placeholder="gsk_..." autocomplete="off"><button id="ap-save" onclick="saveKey()">Save</button></div>
     <p class="ap-hint" id="ap-hint">Free at <a href="https://console.groq.com" target="_blank">console.groq.com</a> &middot; No credit card &middot; 14,400 req/day</p>
   </div>
-  <div class="ap-msgs" id="ap-msgs"><div class="am ai">&#x1F44B; Hi! I can answer any question about your business. I write code to query your data directly &mdash; so filtered questions like "best location in April" work perfectly. Add your free API key above to start.</div></div>
+  <div class="ap-msgs" id="ap-msgs"><div class="am ai">&#x1F44B; Hi! I write code to query your data directly so I can answer any question &mdash; including filtered ones like &ldquo;best location in April&rdquo;. Add your free API key above to start.</div></div>
   <div class="ap-chips"><p>Try asking</p><div class="chip-row">
     <span class="sc" onclick="chip(this)">Highest sale location in April 2026</span>
     <span class="sc" onclick="chip(this)">Pending invoices for Malvani Days</span>
@@ -2049,10 +2088,7 @@ function renderSeasonalIndex(){
     <span class="sc" onclick="chip(this)">Which products are low on stock?</span>
     <span class="sc" onclick="chip(this)">Average monthly sale in Sawantwadi</span>
   </div></div>
-  <div class="ap-bar">
-    <textarea id="ap-input" placeholder="Ask anything about your business..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ask();}"></textarea>
-    <button id="ap-send" onclick="ask()">&#x27A4;</button>
-  </div>
+  <div class="ap-bar"><textarea id="ap-input" placeholder="Ask anything about your business..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ask();}"></textarea><button id="ap-send" onclick="ask()">&#x27A4;</button></div>
 </div>
 </body>
 </html>
