@@ -1,4 +1,4 @@
-finalAnswer=await apiCall([{role:'system',content:'You are a business analyst for GS Agencies. Convert the raw query result into a clear concise answer. Use Rs for currency. Reply in the same language as the user.'},{role:'user',content:'Question: '+q+'\n\nResult:\n'+result}], 500);<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -266,55 +266,35 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
   font-size:13px;font-weight:600;color:var(--accent);}
 @media(max-width:700px){.calc-form{grid-template-columns:1fr 1fr;}}
 
-/* ── AI Agent ─────────────────────────────────────────── */
-#agent-btn{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;
-  border:none;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;
-  cursor:pointer;display:flex;align-items:center;gap:5px;}
+#agent-btn{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:5px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;}
 #agent-btn:hover{opacity:.85;}
-#agent-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);
-  z-index:900;backdrop-filter:blur(2px);}
-#agent-panel{position:fixed;right:0;top:0;height:100%;width:390px;max-width:96vw;
-  background:var(--card);box-shadow:-4px 0 28px rgba(0,0,0,.14);
-  z-index:901;display:flex;flex-direction:column;
-  transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);}
+#agent-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:900;backdrop-filter:blur(2px);}
+#agent-panel{position:fixed;right:0;top:0;height:100%;width:400px;max-width:96vw;background:var(--card);box-shadow:-4px 0 28px rgba(0,0,0,.14);z-index:901;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);}
 #agent-panel.open{transform:translateX(0);}
-.ap-head{padding:13px 16px;background:linear-gradient(135deg,#667eea,#764ba2);
-  color:#fff;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
-.ap-head h3{font-size:14px;font-weight:700;margin:0;}
-.ap-head small{font-size:10px;opacity:.8;}
+.ap-head{padding:13px 16px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.ap-head h3{font-size:14px;font-weight:700;margin:0;}.ap-head small{font-size:10px;opacity:.8;}
 .ap-close{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;padding:0 2px;}
 .ap-setup{padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
-.ap-setup label{font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;
-  letter-spacing:.4px;display:block;margin-bottom:4px;}
+.ap-setup label{font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;}
 .ap-key-row{display:flex;gap:6px;margin-bottom:4px;}
-#ap-key{flex:1;padding:7px 10px;font-size:12px;font-family:inherit;
-  border:1px solid var(--border);border-radius:5px;background:#fafafa;color:var(--text);}
-#ap-save{padding:7px 12px;font-size:12px;font-weight:600;background:var(--blue);
-  color:#fff;border:none;border-radius:5px;cursor:pointer;white-space:nowrap;}
-.ap-hint{font-size:10px;color:var(--dim);}
-.ap-hint a{color:var(--blue);}
+#ap-key{flex:1;padding:7px 10px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;color:var(--text);}
+#ap-save{padding:7px 12px;font-size:12px;font-weight:600;background:var(--blue);color:#fff;border:none;border-radius:5px;cursor:pointer;}
+.ap-hint{font-size:10px;color:var(--dim);}.ap-hint a{color:var(--blue);}
 .ap-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px;}
-.am{max-width:93%;padding:9px 12px;border-radius:10px;font-size:12px;line-height:1.6;
-  white-space:pre-wrap;word-break:break-word;}
-.am.user{background:linear-gradient(135deg,#667eea18,#764ba218);
-  border:1px solid #667eea33;align-self:flex-end;}
+.am{max-width:93%;padding:9px 12px;border-radius:10px;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;}
+.am.user{background:linear-gradient(135deg,#667eea18,#764ba218);border:1px solid #667eea33;align-self:flex-end;}
 .am.ai{background:var(--bg);border:1px solid var(--border);align-self:flex-start;}
 .am.loading{color:var(--dim);font-style:italic;}
 .am.err{background:#fde8e8;border:1px solid #f1a9a0;color:var(--red);}
 .ap-chips{padding:8px 12px;flex-shrink:0;border-top:1px solid var(--border);}
-.ap-chips p{font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;
-  letter-spacing:.4px;margin-bottom:5px;}
+.ap-chips p{font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;}
 .chip-row{display:flex;flex-wrap:wrap;gap:5px;}
-.sc{font-size:11px;padding:4px 9px;background:var(--bg);border:1px solid var(--border);
-  border-radius:12px;cursor:pointer;color:var(--accent);transition:all .12s;}
+.sc{font-size:11px;padding:4px 9px;background:var(--bg);border:1px solid var(--border);border-radius:12px;cursor:pointer;color:var(--accent);transition:all .12s;}
 .sc:hover{background:var(--blue);color:#fff;border-color:var(--blue);}
 .ap-bar{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--border);flex-shrink:0;}
-#ap-input{flex:1;padding:8px 10px;font-size:13px;font-family:inherit;
-  border:1px solid var(--border);border-radius:6px;resize:none;height:38px;
-  max-height:110px;overflow-y:auto;background:#fafafa;}
+#ap-input{flex:1;padding:8px 10px;font-size:13px;font-family:inherit;border:1px solid var(--border);border-radius:6px;resize:none;height:38px;max-height:110px;overflow-y:auto;background:#fafafa;}
 #ap-input:focus{outline:none;border-color:#667eea;background:#fff;}
-#ap-send{padding:8px 16px;font-size:14px;background:linear-gradient(135deg,#667eea,#764ba2);
-  color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;}
+#ap-send{padding:8px 16px;font-size:14px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;}
 #ap-send:disabled{opacity:.45;cursor:not-allowed;}
 @media(max-width:480px){#agent-panel{width:100%;}}
 </style>
@@ -413,7 +393,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
       <button class="btn btn-blue btn-sm" onclick="applyFilters()">Apply</button>
       <button class="btn btn-outline btn-sm" onclick="showUpload()">📂 Data</button>
       <button class="btn btn-outline btn-sm" onclick="clearCacheAndReload()" title="Fetch latest data from GitHub">🔄 Refresh</button>
-      <button id="agent-btn" onclick="openAgent()">✨ Ask AI</button>
+      <button id="agent-btn" onclick="openAgent()">&#x2728; Ask AI</button>
     </div>
   </div>
 
@@ -2031,409 +2011,47 @@ function renderSeasonalIndex(){
   });
 }
 
-// ══════════════════════════════════════════════════════════
-// GS BUSINESS ASSISTANT (DeepLearning.ai schema_block pattern)
-// ══════════════════════════════════════════════════════════
-
-const _GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions';
-const _GROQ_MODEL = 'llama-3.3-70b-versatile';
-let   _history    = [];
-
-function openAgent(){
-  document.getElementById('agent-overlay').style.display='block';
-  document.getElementById('agent-panel').classList.add('open');
-  const k=localStorage.getItem('gs_groq_key');
-  if(k) document.getElementById('ap-key').value=k;
-}
-function closeAgent(){
-  document.getElementById('agent-overlay').style.display='none';
-  document.getElementById('agent-panel').classList.remove('open');
-}
-function saveKey(){
-  const k=document.getElementById('ap-key').value.trim();
-  if(!k){alert('Enter a key first.');return;}
-  localStorage.setItem('gs_groq_key',k);
-  const b=document.getElementById('ap-save');
-  b.textContent='Saved ✓';b.style.background='var(--green)';
-  setTimeout(()=>{b.textContent='Save';b.style.background='';},1600);
-}
-function chip(el){ document.getElementById('ap-input').value=el.textContent; ask(); }
-
-function buildSchemaBlock(){
-  if(!DATA) return 'No data loaded.';
-  const so=DATA.stock_out||[], ss=DATA.sales_summary||[];
-  const prods=DATA.products||[], custs=DATA.customers||[];
-  const si=DATA.stock_in||[], exp=DATA.expenses||[];
-  const f=window._f||{};
-
-  // ── helpers ──────────────────────────────────────────────
-  const invSS=ss.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-'));
-  const paySS=ss.filter(r=> String(r.reference_invoice_id||'').startsWith('PAY-'));
-  const custLocMap={};
-  custs.forEach(c=>{ custLocMap[c.customer_name]=c.location||'Unknown'; });
-  const allDates=so.map(r=>r.sale_date).filter(Boolean).sort();
-  const dateRange=allDates.length?(f.from||allDates[0])+' to '+(f.to||allDates[allDates.length-1]):'All time';
-  const days=f.from&&f.to?Math.max(1,Math.round((new Date(f.to)-new Date(f.from))/86400000)+1):
-    allDates.length?Math.max(1,Math.round((new Date(allDates[allDates.length-1])-new Date(allDates[0]))/86400000)+1):90;
-
-  // ── financials ────────────────────────────────────────────
-  const revenue=invSS.reduce((s,r)=>s+(+r.total_bill||0),0);
-  const gp=so.reduce((s,r)=>s+((+r.total_sale||0)-(+r.buying_rate_at_time||0)),0);
-  const collected=ss.reduce((s,r)=>s+(+r.cash_received||0)+(+r.upi_received||0),0);
-
-  // ── monthly revenue & GP breakdown (last 18 months) ───────
-  const mRev={}, mGP={}, mInvCount={};
-  invSS.forEach(r=>{
-    const m=r.sale_date?r.sale_date.slice(0,7):null; if(!m)return;
-    mRev[m]=(mRev[m]||0)+(+r.total_bill||0);
-    mInvCount[m]=(mInvCount[m]||0)+1;
-  });
-  so.forEach(r=>{
-    const m=r.sale_date?r.sale_date.slice(0,7):null; if(!m)return;
-    mGP[m]=(mGP[m]||0)+((+r.total_sale||0)-(+r.buying_rate_at_time||0));
-  });
-  const monthlyLines=Object.keys(mRev).sort().slice(-18)
-    .map(m=>'  '+m+': revenue=Rs'+Math.round(mRev[m]/1000)+'K'
-      +', gp=Rs'+Math.round((mGP[m]||0)/1000)+'K'
-      +', invoices='+mInvCount[m]).join('\n');
-
-  // ── outstanding dues + pending invoice list ───────────────
-  // tpLedger: compute true_pending per invoice via PAY rows
-  const tpLedger={};
-  invSS.forEach(r=>{ tpLedger[r.reference_invoice_id]=
-    Math.max(0,(+r.total_bill||0)-(+r.discount_amount||0)-(+r.cash_received||0)-(+r.upi_received||0)); });
-  paySS.forEach(r=>{
-    const ref=r.reference_invoice||''; if(ref&&tpLedger[ref]!==undefined){
-      const paid=(+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0);
-      tpLedger[ref]=Math.max(0,tpLedger[ref]-paid);
-    }
-  });
-  const owedMap={};
-  invSS.forEach(r=>{ const tp=tpLedger[r.reference_invoice_id]||0;
-    if(tp>0.5) owedMap[r.customer_name]=(owedMap[r.customer_name]||0)+tp; });
-  const owedLines=Object.entries(owedMap).sort((a,b)=>b[1]-a[1]).slice(0,20)
-    .map(([n,v])=>'  '+n+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\n');
-
-  // Pending invoices (all, sorted oldest first) — invoice ID, customer, date, amount due
-  const pendingInv=invSS
-    .filter(r=>(tpLedger[r.reference_invoice_id]||0)>0.5)
-    .sort((a,b)=>(a.sale_date||'').localeCompare(b.sale_date||''))
-    .map(r=>'  '+r.sale_date+' | '+r.reference_invoice_id+' | '+(r.physical_invoice_no||'-')
-      +' | '+r.customer_name+' | billed=Rs'+(r.total_bill||0)+' | due=Rs'+Math.round(tpLedger[r.reference_invoice_id]))
-    .join('\n');
-
-  // ── per-customer summary (top 30 by revenue) ─────────────
-  const custRev={}, custInvCount={}, custCollected={};
-  invSS.forEach(r=>{
-    custRev[r.customer_name]=(custRev[r.customer_name]||0)+(+r.total_bill||0);
-    custInvCount[r.customer_name]=(custInvCount[r.customer_name]||0)+1;
-  });
-  ss.forEach(r=>{ custCollected[r.customer_name]=(custCollected[r.customer_name]||0)
-    +(+r.cash_received||0)+(+r.upi_received||0); });
-  const custLines=Object.entries(custRev).sort((a,b)=>b[1]-a[1]).slice(0,30)
-    .map(([n,v])=>'  '+n+' ('+( custLocMap[n]||'?')+')'
-      +': revenue=Rs'+Math.round(v/1000)+'K'
-      +', invoices='+custInvCount[n]
-      +', avg=Rs'+Math.round(v/(custInvCount[n]||1))
-      +', collected=Rs'+Math.round((custCollected[n]||0)/1000)+'K'
-      +', owed=Rs'+Math.round(owedMap[n]||0)).join('\n');
-
-  // ── location summary with transaction counts ──────────────
-  const locRev={}, locInvCount={}, locCustCount={};
-  invSS.forEach(r=>{
-    const l=custLocMap[r.customer_name]||'Unknown';
-    locRev[l]=(locRev[l]||0)+(+r.total_bill||0);
-    locInvCount[l]=(locInvCount[l]||0)+1;
-  });
-  custs.forEach(c=>{ const l=c.location||'Unknown'; locCustCount[l]=(locCustCount[l]||0)+1; });
-  const locLines=Object.entries(locRev).sort((a,b)=>b[1]-a[1])
-    .map(([l,v])=>'  '+l+': revenue=Rs'+Math.round(v/1000)+'K'
-      +', invoices='+locInvCount[l]
-      +', avg=Rs'+Math.round(v/(locInvCount[l]||1))
-      +', customers='+(locCustCount[l]||0)).join('\n');
-
-  // ── products ──────────────────────────────────────────────
-  const pRev={},pQty={},pGP={};
-  so.forEach(r=>{
-    pRev[r.product_name]=(pRev[r.product_name]||0)+(+r.total_sale||0);
-    pQty[r.product_name]=(pQty[r.product_name]||0)+(+r.quantity||0);
-    pGP[r.product_name]=(pGP[r.product_name]||0)+((+r.total_sale||0)-(+r.buying_rate_at_time||0));
-  });
-  const prodLines=prods.map(p=>{
-    const rate=(pQty[p.product_name]||0)/days;
-    const cover=rate>0?Math.round((+p.current_stock||0)/rate):null;
-    return '  '+p.product_name
-      +': stock='+p.current_stock
-      +', pack='+p.pack_size
-      +', sold='+Math.round(pQty[p.product_name]||0)+'units'
-      +', rev=Rs'+Math.round((pRev[p.product_name]||0)/1000)+'K'
-      +(cover!==null?', cover~'+cover+'d':'');
-  }).sort((a,b)=>a.localeCompare(b)).join('\n');
-
-  // ── expenses ─────────────────────────────────────────────
-  const expMap={};
-  exp.forEach(r=>{ expMap[r.spent_on]=(expMap[r.spent_on]||0)+(+r.total_expense||0); });
-  const expLines=Object.entries(expMap).sort((a,b)=>b[1]-a[1])
-    .map(([k,v])=>'  '+k+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\n');
-
-  return '=== GS AGENCIES DATA SNAPSHOT ===\n'
-    +'Business: Pepsi distribution, Konkan/Sindhudurg, Maharashtra\n'
-    +'Date range: '+dateRange+' ('+days+' days) | Customers: '+custs.length+' | Products: '+prods.length+'\n'
-    +'Total invoices: '+invSS.length+' | Payment rows: '+paySS.length+'\n'
-    +'Exported: '+(DATA.exported_at||'unknown')+'\n\n'
-    +'--- FINANCIALS ---\n'
-    +'Revenue: Rs'+Math.round(revenue/1000)+'K | GP: Rs'+Math.round(gp/1000)
-    +'K ('+Math.round(revenue>0?gp/revenue*100:0)+'%) | Collected: Rs'+Math.round(collected/1000)+'K\n'
-    +'Avg invoice value: Rs'+Math.round(revenue/(invSS.length||1))+'\n\n'
-    +'--- MONTHLY REVENUE & GP BREAKDOWN ---\n'+monthlyLines+'\n\n'
-    +'--- OUTSTANDING DUES BY CUSTOMER ---\n'+owedLines+'\n\n'
-    +'--- ALL PENDING INVOICES (date | invoice_id | phys# | customer | billed | due) ---\n'+pendingInv+'\n\n'
-    +'--- CUSTOMER SUMMARY (top 30 by revenue) ---\n'+custLines+'\n\n'
-    +'--- LOCATION SUMMARY ---\n'+locLines+'\n\n'
-    +'--- ALL PRODUCTS (name: stock, pack, units_sold, revenue, cover_days) ---\n'+prodLines+'\n\n'
-    +'--- EXPENSES BY CATEGORY ---\n'+(expLines||'  No data');
-}
-
-function _msg(role, text, cls){
-  const box=document.getElementById('ap-msgs');
-  const el=document.createElement('div');
-  el.className='am '+role+(cls?' '+cls:'');
-  el.textContent=text;
-  box.appendChild(el);
-  box.scrollTop=box.scrollHeight;
-  return el;
-}
-
-// ── DATA SCHEMA for code-generation prompt ────────────────
-// Describes the structure of the global DATA object so the LLM
-// can write correct JS to query it.
-function dataSchema(){
-  return `DATA object structure (read-only, already loaded in browser):
-
-DATA.stock_out[]       — one row per product line on each invoice
-  .sale_date           string "YYYY-MM-DD"
-  .invoice_id          string e.g. "INV-260101-417"
-  .customer_name       string
-  .product_name        string
-  .product_id          string
-  .quantity            number (units sold)
-  .unit_price          number
-  .total_sale          number (revenue for this line)
-  .buying_rate_at_time number (cost for this line)
-
-DATA.sales_summary[]   — one row per invoice header or payment
-  .reference_invoice_id  string — own ID (INV-/SYS- for invoices, PAY- for payments)
-  .reference_invoice     string — for PAY rows: the invoice_id being settled
-  .sale_date             string "YYYY-MM-DD"
-  .customer_name         string
-  .total_bill            number
-  .discount_amount       number
-  .cash_received         number
-  .upi_received          number
-  .total_received        number
-  .balance_due           number (may be stale; use tpLedger pattern for accuracy)
-  .physical_invoice_no   string
-
-DATA.products[]
-  .product_id  .product_name  .current_stock  .pack_size
-  .cost_price_unit  .selling_price_unit  .pack_cost
-
-DATA.customers[]
-  .customer_name  .location  .contact
-
-DATA.stock_in[]
-  .transaction_date  .product_id  .quantity  .unit_cost  .total_cost
-
-DATA.expenses[]
-  .expense_date  .spent_on  .cash_expense  .online_expense  .total_expense
-
-Useful patterns:
-  // location of a customer
-  const locMap={}; DATA.customers.forEach(c=>locMap[c.customer_name]=c.location||'Unknown');
-  // gross profit per line
-  const gp = r.total_sale - r.buying_rate_at_time;
-  // pending per invoice (tpLedger)
-  const tp={}; invRows.forEach(r=>{ tp[r.reference_invoice_id]=Math.max(0,(r.total_bill||0)-(r.discount_amount||0)-(r.cash_received||0)-(r.upi_received||0)); });
-  payRows.forEach(r=>{ const ref=r.reference_invoice; if(ref&&tp[ref]!==undefined) tp[ref]=Math.max(0,tp[ref]-((r.cash_received||0)+(r.upi_received||0)+(r.discount_amount||0))); });`;
-}
-
-// ── Safe JS sandbox execution ─────────────────────────────
-// Executes LLM-generated code with DATA available.
-// Returns { result, error } — never throws.
-function sandboxExec(code){
-  try{
-    const fn=new Function('DATA','custLocMap',
-      '"use strict";\n'+code);
-    const locMap={};
-    DATA.customers.forEach(c=>{ locMap[c.customer_name]=c.location||'Unknown'; });
-    const result=fn(DATA, locMap);
-    // Serialize result sensibly
-    if(result===undefined) return {result:'(no return value — code ran without errors)'};
-    if(typeof result==='object') return {result:JSON.stringify(result,null,2)};
-    return {result:String(result)};
-  }catch(e){
-    return {error:e.message};
-  }
-}
-
-// ── Extract <execute_js>...</execute_js> block ────────────
-function extractCode(text){
-  const m=text.match(/<execute_js>([\s\S]*?)<\/execute_js>/i);
-  return m?m[1].trim():null;
-}
-
-// ── Groq API call helper ──────────────────────────────────
-async function groqCall(messages, key, maxTokens=800, temp=0.1){
-  const resp=await fetch(_GROQ_URL,{method:'POST',
-    headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-    body:JSON.stringify({model:_GROQ_MODEL,max_tokens:maxTokens,temperature:temp,messages})});
-  if(!resp.ok){const e=await resp.json().catch(()=>({})); throw new Error(e?.error?.message||'HTTP '+resp.status);}
-  const d=await resp.json();
-  return d.choices?.[0]?.message?.content||'';
-}
-
-// ── Main ask() — two-step agent loop ─────────────────────
-// Step 1: LLM decides whether to write code or answer directly.
-// Step 2: If code, execute it and feed result back for final answer.
-async function ask(){
-  const inp=document.getElementById('ap-input');
-  const q=inp.value.trim(); if(!q) return;
-  const key=localStorage.getItem('gs_groq_key')||document.getElementById('ap-key').value.trim();
-  if(!key){_msg('ai','Add your free Groq key above first — get one at console.groq.com','err');return;}
-  if(!DATA){_msg('ai','No data loaded. Click Refresh first.','err');return;}
-  inp.value='';
-  document.getElementById('ap-send').disabled=true;
-  _msg('user',q);
-  const loader=_msg('ai','Thinking…','loading');
-  _history.push({role:'user',content:q});
-
-  const codeSystemPrompt=`You are a data analyst assistant for GS Agencies, a Pepsi distributor in Konkan/Sindhudurg, India.
-You have access to the business data via the JavaScript DATA object described below.
-
-${dataSchema()}
-
-INSTRUCTIONS:
-- For ANY question that requires querying, filtering, aggregating or computing over the data, write JavaScript code to compute the answer.
-- Wrap your code in <execute_js>...</execute_js> tags.
-- The code runs in a browser sandbox with DATA and custLocMap (location lookup map) available.
-- Your code MUST return a value (use "return ...") — it is wrapped in a function.
-- Keep code concise. No console.log. Return a string, number, array, or plain object.
-- For simple conversational questions (greetings, explanations, draft messages) answer directly WITHOUT code.
-- After seeing code results you will be asked to give a plain English answer.
-
-EXAMPLES:
-Q: "Highest sale location in April 2026"
-<execute_js>
-const rows=DATA.stock_out.filter(r=>r.sale_date&&r.sale_date.startsWith('2026-04'));
-const m={};
-rows.forEach(r=>{ const l=custLocMap[r.customer_name]||'Unknown'; m[l]=(m[l]||0)+(+r.total_sale||0); });
-const sorted=Object.entries(m).sort((a,b)=>b[1]-a[1]);
-return sorted.map(([l,v])=>l+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\n');
-</execute_js>
-
-Q: "Pending invoices for Malvani Days"
-<execute_js>
-const ss=DATA.sales_summary;
-const inv=ss.filter(r=>r.customer_name==='Malvani Days'&&!String(r.reference_invoice_id||'').startsWith('PAY-'));
-const pay=ss.filter(r=>r.customer_name==='Malvani Days'&&String(r.reference_invoice_id||'').startsWith('PAY-'));
-const tp={};
-inv.forEach(r=>{ tp[r.reference_invoice_id]=Math.max(0,(+r.total_bill||0)-(+r.discount_amount||0)-(+r.cash_received||0)-(+r.upi_received||0)); });
-pay.forEach(r=>{ const ref=r.reference_invoice||''; if(ref&&tp[ref]!==undefined) tp[ref]=Math.max(0,tp[ref]-((+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0))); });
-const pending=inv.filter(r=>tp[r.reference_invoice_id]>0.5);
-return pending.map(r=>r.sale_date+' | '+r.reference_invoice_id+' | billed Rs'+r.total_bill+' | due Rs'+Math.round(tp[r.reference_invoice_id])).join('\n');
-</execute_js>`;
-
-  try{
-    // ── Step 1: ask LLM to generate code or answer ────────
-    loader.textContent='Analysing question…';
-    const step1=await groqCall([
-      {role:'system',content:codeSystemPrompt},
-      ..._history.slice(-6)
-    ], key, 900, 0.1);
-
-    const code=extractCode(step1);
-
-    if(!code){
-      // LLM answered directly (greeting, draft message etc.)
-      loader.textContent=step1; loader.className='am ai';
-      _history.push({role:'assistant',content:step1});
-    } else {
-      // ── Step 2: execute code + get plain English answer ──
-      loader.textContent='Running query…';
-      const {result, error}=sandboxExec(code);
-
-      let finalAnswer;
-      if(error){
-        // Code errored — tell LLM to try again or answer differently
-        const retry=await groqCall([
-          {role:'system',content:codeSystemPrompt},
-          ..._history.slice(-6),
-          {role:'assistant',content:step1},
-          {role:'user',content:'The code produced an error: '+error+'. Please fix the code or answer without code.'}
-        ], key, 900, 0.1);
-        const code2=extractCode(retry);
-        if(code2){
-          const {result:r2, error:e2}=sandboxExec(code2);
-          finalAnswer=e2?('Code error: '+e2):r2;
-        } else { finalAnswer=retry; }
-      } else {
-        // Feed result to LLM for plain English answer
-        loader.textContent='Interpreting results…';
-        finalAnswer=await groqCall([
-          {role:'system',
-           content:'You are a business analyst for GS Agencies. Convert the following raw query result into a clear, concise answer in plain English. Use Rs for currency. Be brief and direct. Reply in the same language as the original question.'},
-          {role:'user', content:'Original question: '+q+'\n\nQuery result:\n'+result}
-        ], key, 500, 0.2);
-      }
-
-      loader.textContent=finalAnswer; loader.className='am ai';
-      _history.push({role:'assistant',content:finalAnswer});
-    }
-
-    if(_history.length>12) _history=_history.slice(-12);
-
-  }catch(e){
-    loader.textContent='Error: '+e.message;
-    loader.className='am ai err'; _history.pop();
-  }
-  document.getElementById('ap-send').disabled=false;
-}
-
 </script>
-
-<!-- AI Agent Panel -->
+<!-- AI Agent -->
 <div id="agent-overlay" onclick="closeAgent()"></div>
 <div id="agent-panel">
   <div class="ap-head">
-    <div><h3>✨ GS Business Assistant</h3><small>Groq · Llama 3.1 · Free</small></div>
-    <button class="ap-close" onclick="closeAgent()">✕</button>
+    <div><h3>&#x2728; GS Business Assistant</h3><small id="ap-model-label">Groq &middot; Llama 3.3 70B</small></div>
+    <button class="ap-close" onclick="closeAgent()">&#x2715;</button>
   </div>
   <div class="ap-setup">
-    <label>Groq API Key</label>
-    <div class="ap-key-row">
-      <input type="password" id="ap-key" placeholder="gsk_…" autocomplete="off">
+    <div style="display:flex;gap:6px;margin-bottom:8px;">
+      <div style="flex:1;"><label>Provider</label>
+        <select id="ap-provider" onchange="onProviderChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;">
+          <option value="groq">Groq (14,400/day)</option>
+          <option value="gemini">Google Gemini</option>
+        </select></div>
+      <div style="flex:1;"><label>Model</label>
+        <select id="ap-model" onchange="onModelChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;">
+          <option value="llama-3.3-70b-versatile">Llama 3.3 70B &#x2605;</option>
+          <option value="llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B</option>
+          <option value="llama-3.1-8b-instant">Llama 3.1 8B</option>
+        </select></div>
+    </div>
+    <label id="ap-key-label">Groq API Key</label>
+    <div class="ap-key-row" style="margin-top:3px;">
+      <input type="password" id="ap-key" placeholder="gsk_..." autocomplete="off">
       <button id="ap-save" onclick="saveKey()">Save</button>
     </div>
-    <p class="ap-hint">Free at <a href="https://console.groq.com" target="_blank">console.groq.com</a> · No credit card · 14,400 req/day</p>
+    <p class="ap-hint" id="ap-hint">Free at <a href="https://console.groq.com" target="_blank">console.groq.com</a> &middot; No credit card &middot; 14,400 req/day</p>
   </div>
-  <div class="ap-msgs" id="ap-msgs">
-    <div class="am ai">👋 Hi! I can answer questions about your sales, stock, customers and receivables. Add your free Groq key above to get started.</div>
-  </div>
-  <div class="ap-chips">
-    <p>Try asking</p>
-    <div class="chip-row">
-      <span class="sc" onclick="chip(this)">Who owes the most money?</span>
-      <span class="sc" onclick="chip(this)">Top 5 products by revenue</span>
-      <span class="sc" onclick="chip(this)">Which products are low on stock?</span>
-      <span class="sc" onclick="chip(this)">Summarise this month's sales</span>
-      <span class="sc" onclick="chip(this)">Which location buys the most?</span>
-      <span class="sc" onclick="chip(this)">Draft a payment reminder for [customer]</span>
-    </div>
-  </div>
+  <div class="ap-msgs" id="ap-msgs"><div class="am ai">&#x1F44B; Hi! I can answer any question about your business. I write code to query your data directly &mdash; so filtered questions like "best location in April" work perfectly. Add your free API key above to start.</div></div>
+  <div class="ap-chips"><p>Try asking</p><div class="chip-row">
+    <span class="sc" onclick="chip(this)">Highest sale location in April 2026</span>
+    <span class="sc" onclick="chip(this)">Pending invoices for Malvani Days</span>
+    <span class="sc" onclick="chip(this)">Top 5 products by revenue</span>
+    <span class="sc" onclick="chip(this)">Who owes the most money?</span>
+    <span class="sc" onclick="chip(this)">Which products are low on stock?</span>
+    <span class="sc" onclick="chip(this)">Average monthly sale in Sawantwadi</span>
+  </div></div>
   <div class="ap-bar">
-    <textarea id="ap-input" placeholder="Ask anything about your business…"
-      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ask();}"></textarea>
-    <button id="ap-send" onclick="ask()">➤</button>
+    <textarea id="ap-input" placeholder="Ask anything about your business..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ask();}"></textarea>
+    <button id="ap-send" onclick="ask()">&#x27A4;</button>
   </div>
 </div>
 </body>
