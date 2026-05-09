@@ -297,6 +297,28 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 #ap-send{padding:8px 16px;font-size:14px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;}
 #ap-send:disabled{opacity:.45;cursor:not-allowed;}
 @media(max-width:480px){#agent-panel{width:100%;}}
+
+/* ── Inventory Table ─────────────────────────────────── */
+.inv-search-wrap{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+#inv-search{flex:1;padding:7px 12px;font-size:13px;font-family:inherit;
+  border:1px solid var(--border);border-radius:6px;background:#fafafa;}
+#inv-search:focus{outline:none;border-color:var(--blue);background:#fff;}
+.inv-search-count{font-size:11px;color:var(--dim);white-space:nowrap;}
+.inv-table-wrap{overflow-x:auto;max-height:460px;overflow-y:auto;
+  border:1px solid var(--border);border-radius:6px;}
+.inv-table{width:100%;border-collapse:collapse;font-size:12px;}
+.inv-table thead tr{background:var(--accent);color:#fff;position:sticky;top:0;z-index:1;}
+.inv-table th{padding:9px 12px;text-align:right;font-weight:600;white-space:nowrap;cursor:pointer;user-select:none;}
+.inv-table th:first-child{text-align:left;}
+.inv-table th .sort-icon{margin-left:4px;opacity:.7;font-size:10px;}
+.inv-table tbody tr:nth-child(even){background:var(--bg);}
+.inv-table tbody tr:hover{background:#e8f4fd;}
+.inv-table td{padding:7px 12px;border-bottom:1px solid var(--border);text-align:right;}
+.inv-table td:first-child{text-align:left;font-weight:500;}
+.inv-table tfoot tr{background:var(--accent);color:#fff;font-weight:700;}
+.inv-table tfoot td{padding:9px 12px;}
+.inv-table tfoot td:first-child{text-align:left;}
+.inv-profit{color:var(--green);font-weight:600;}
 </style>
 </head>
 <body>
@@ -555,6 +577,32 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
         <div class="chart-card">
           <div class="chart-title">3-Month Moving Average</div>
           <div class="chart-canvas-wrap" style="height:280px;"><canvas id="chart-moving-avg"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Inventory Valuation Table -->
+      <div class="chart-card fade-in" style="margin-top:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div class="chart-title" style="margin-bottom:0;">&#x1F4E6; Current Inventory Valuation</div>
+        </div>
+        <div class="inv-search-wrap">
+          <input type="text" id="inv-search" placeholder="Search products&#x2026;"
+            oninput="renderInventoryTable()">
+          <span class="inv-search-count" id="inv-search-count"></span>
+        </div>
+        <div class="inv-table-wrap">
+          <table class="inv-table">
+            <thead><tr>
+              <th onclick="_invSort('name')">Product <span class="sort-icon" id="inv-sort-name">&#x25B2;</span></th>
+              <th onclick="_invSort('boxes')">Boxes <span class="sort-icon" id="inv-sort-boxes"></span></th>
+              <th onclick="_invSort('bottles')">Bottles <span class="sort-icon" id="inv-sort-bottles"></span></th>
+              <th onclick="_invSort('cost')">Total Cost <span class="sort-icon" id="inv-sort-cost"></span></th>
+              <th onclick="_invSort('mrp')">MRP/Box <span class="sort-icon" id="inv-sort-mrp"></span></th>
+              <th onclick="_invSort('profit')">Est. Profit <span class="sort-icon" id="inv-sort-profit"></span></th>
+            </tr></thead>
+            <tbody id="inv-tbody"></tbody>
+            <tfoot><tr id="inv-tfoot"></tr></tfoot>
+          </table>
         </div>
       </div>
 
@@ -1151,6 +1199,7 @@ function renderTab(id){
     safeRender(()=>populateLedgerDropdown(),'ledger-dropdown');
   } else if(id==='forecast'){
     safeRender(()=>renderForecast(invOnly,f),'forecast');
+    safeRender(()=>renderInventoryTable(),'inv-table');
   } else if(id==='insights'){
     safeRender(()=>renderStockCover(f),'stock-cover');
     safeRender(()=>renderPurchVsSales(f),'purch-vs-sales');
@@ -2091,7 +2140,7 @@ async function ask(){
   inp.value='';document.getElementById('ap-send').disabled=true;
   _msg('user',q);const loader=_msg('ai','Thinking...','loading');
   _history.push({role:'user',content:q});
-  const codeSys='You are a data analyst for GS Agencies, Pepsi distributor in Konkan/Sindhudurg.\n\nDATA SCHEMA:\n'+dataSchema()+'\n\nCONTEXT:\n'+buildSchemaBlock()+'\n\nCRITICAL RULES:\n1. For ANY computation/data question write JS code inside <execute_js>...</execute_js> tags.\n2. Code runs with DATA and custLocMap available. MUST end with a return statement.\n3. Inside the tags put ONLY valid JavaScript. No explanations, no thoughts, no markdown fences.\n4. For greetings or message drafts only: answer directly without code tags.\n\nEXAMPLE (most sold product to a customer):\n<execute_js>\nconst rows=DATA.stock_out.filter(r=>r.customer_name==="BKC canteen");\nconst m={};rows.forEach(r=>{m[r.product_name]=(m[r.product_name]||0)+(+r.quantity||0);});\nconst s=Object.entries(m).sort((a,b)=>b[1]-a[1]);\nreturn s.slice(0,5).map(([p,q])=>p+": "+q+" units").join("\n");\n</execute_js>';
+  const codeSys='You are a data analyst for GS Agencies, Pepsi distributor.\n\nSCHEMA:\n'+dataSchema()+'\n\nCONTEXT:\n'+buildSchemaBlock()+'\n\nHELPERS AVAILABLE IN SCOPE (ALWAYS use these for receivables):\ngetPendingInvoices(custName|null) -> [{invoice_id,customer_name,date,billed,due}] correct tpLedger\ngetCustomerOutstanding(custName) -> {customer,total_outstanding,invoice_count}\ngetAllOutstanding() -> [{customer,outstanding}] sorted desc\n\nMANDATORY RULES:\n1. ALWAYS generate <execute_js>...return result;</execute_js> for ANY data question.\n2. NEVER answer data questions from memory or context — ALWAYS query DATA via code.\n3. Use getPendingInvoices() for ANY pending/unpaid invoice question — never recompute manually.\n4. custLocMap is pre-declared — do NOT redeclare it.\n5. Only plain text (no code) for greetings and message drafts.\n\nEXAMPLES:\nQ: unpaid invoices Feb 2026\n<execute_js>\nconst p=getPendingInvoices(null).filter(r=>r.date&&r.date.startsWith(\'2026-02\'));\nif(!p.length) return \'No unpaid invoices for Feb 2026.\';\nconst total=p.reduce((s,r)=>s+r.due,0);\nreturn p.map(r=>r.date+\' | \'+r.invoice_id+\' | \'+r.customer_name+\' | Rs\'+r.due).join(\'\\n\')+\'\\nTotal: \'+p.length+\' invoices, Rs\'+total;\n</execute_js>\nQ: top products by revenue\n<execute_js>\nconst m={};DATA.stock_out.forEach(r=>{m[r.product_name]=(m[r.product_name]||0)+(+r.total_sale||0);});\nreturn Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([p,v])=>p+\': Rs\'+Math.round(v).toLocaleString(\'en-IN\')).join(\'\\n\');\n</execute_js>';
   // ── Helper: call Gemini API (same key, different model) ─────────────
   const _geminiKey=localStorage.getItem('gs_gemini_key')||'';
   const _groqKey=localStorage.getItem('gs_groq_key')||'';
@@ -2107,7 +2156,7 @@ async function ask(){
   let step1='';
   let code=null;
   try{
-    loader.textContent='Analysing...';
+    loader.textContent='Groq → generating code...';
     if(!_groqKey) throw new Error('no groq key');
     step1=await _callGroq(_codePrompt,900);
     code=extractCode(step1);
@@ -2129,7 +2178,16 @@ async function ask(){
   }
 
   if(!code){
-    // No code — direct conversational answer
+    // Check if this looks like a genuine conversational reply
+    // (greetings, drafts) vs a hallucinated data answer
+    const _isDataQ=/(invoice|pending|unpaid|revenue|sale|customer|stock|outstanding|product|location|collect|payment)/i.test(q);
+    if(_isDataQ){
+      // Model answered without code for a data question — likely hallucinating
+      loader.textContent='Model answered without executing code. Please rephrase or check your API key.'; 
+      loader.className='am ai err';
+      _history.pop(); document.getElementById('ap-send').disabled=false; return;
+    }
+    // Genuine conversational reply
     loader.textContent=step1; loader.className='am ai';
     _history.push({role:'assistant',content:step1});
     if(_history.length>12)_history=_history.slice(-12);
@@ -2163,10 +2221,11 @@ async function ask(){
   let ans=null;
 
   if(_geminiKey){
-    // Try Gemma 4 26B first
+    // Try Gemma 4 26B first (15s timeout)
     try{
       loader.textContent='Formatting...';
-      ans=await _callGemini('gemma-4-26b-a4b-it',_fmtPrompt,2000);
+      const _gemmaTimeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),15000));
+      ans=await Promise.race([_callGemini('gemma-4-26b-a4b-it',_fmtPrompt,2000),_gemmaTimeout]);
     }catch(e1){
       // Gemma failed — try Flash-Lite
       try{
@@ -2192,6 +2251,75 @@ async function ask(){
   if(_history.length>12)_history=_history.slice(-12);
   document.getElementById('ap-send').disabled=false;
 }
+
+// ══════════════════════════════════════════════
+// INVENTORY VALUATION TABLE
+// ══════════════════════════════════════════════
+let _invSortCol='name', _invSortAsc=true;
+
+function _invSort(col){
+  _invSortAsc=(_invSortCol===col)?!_invSortAsc:(col==='name');
+  _invSortCol=col;
+  renderInventoryTable();
+}
+
+function renderInventoryTable(){
+  if(!DATA||!DATA.products) return;
+  const q=(document.getElementById('inv-search')?.value||'').toLowerCase().trim();
+  const rows=DATA.products
+    .filter(p=>(p.product_name||'').toLowerCase().includes(q))
+    .map(p=>{
+      const stock=+p.current_stock||0;
+      const pack=+p.pack_size||1;
+      const cu=+p.cost_price_unit||0;
+      const su=+p.selling_price_unit||0;
+      return{
+        name:p.product_name||'',
+        boxes:Math.floor(stock/pack),
+        bottles:stock%pack,
+        cost:Math.round(stock*cu),
+        mrp:Math.round(su*pack),
+        profit:Math.round(stock*su)-Math.round(stock*cu)
+      };
+    });
+
+  rows.sort((a,b)=>{
+    const av=a[_invSortCol],bv=b[_invSortCol];
+    if(typeof av==='string') return _invSortAsc?av.localeCompare(bv):bv.localeCompare(av);
+    return _invSortAsc?av-bv:bv-av;
+  });
+
+  ['name','boxes','bottles','cost','mrp','profit'].forEach(c=>{
+    const el=document.getElementById('inv-sort-'+c);
+    if(el) el.textContent=_invSortCol===c?(_invSortAsc?'\u25B2':'\u25BC'):'';
+  });
+
+  const tbody=document.getElementById('inv-tbody');
+  if(!tbody) return;
+  tbody.innerHTML=rows.map(r=>`<tr>
+    <td>${r.name}</td>
+    <td>${r.boxes.toLocaleString('en-IN')}</td>
+    <td>${r.bottles.toLocaleString('en-IN')}</td>
+    <td>${fmt(r.cost)}</td>
+    <td>${fmt(r.mrp)}</td>
+    <td class="${r.profit>=0?'inv-profit':''}">${fmt(r.profit)}</td>
+  </tr>`).join('');
+
+  const tfoot=document.getElementById('inv-tfoot');
+  if(tfoot) tfoot.innerHTML=`
+    <td>TOTAL (${rows.length} products)</td>
+    <td>${rows.reduce((s,r)=>s+r.boxes,0).toLocaleString('en-IN')}</td>
+    <td>${rows.reduce((s,r)=>s+r.bottles,0).toLocaleString('en-IN')}</td>
+    <td>${fmt(rows.reduce((s,r)=>s+r.cost,0))}</td>
+    <td>&#x2014;</td>
+    <td class="${rows.reduce((s,r)=>s+r.profit,0)>=0?'inv-profit':''}">${fmt(rows.reduce((s,r)=>s+r.profit,0))}</td>`;
+
+  const cnt=document.getElementById('inv-search-count');
+  if(cnt) cnt.textContent=q
+    ?`${rows.length} of ${DATA.products.length} products`
+    :`${DATA.products.length} products`;
+}
+
 </script>
 <!-- AI Agent -->
 <div id="agent-overlay" onclick="closeAgent()"></div>
