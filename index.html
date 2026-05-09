@@ -297,28 +297,6 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 #ap-send{padding:8px 16px;font-size:14px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;}
 #ap-send:disabled{opacity:.45;cursor:not-allowed;}
 @media(max-width:480px){#agent-panel{width:100%;}}
-
-/* ── Inventory Table ──────────────────────────────────── */
-.inv-search-wrap{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
-#inv-search{flex:1;padding:7px 12px;font-size:13px;font-family:inherit;
-  border:1px solid var(--border);border-radius:6px;background:#fafafa;}
-#inv-search:focus{outline:none;border-color:var(--blue);background:#fff;}
-.inv-search-count{font-size:11px;color:var(--dim);white-space:nowrap;}
-.inv-table-wrap{overflow-x:auto;max-height:460px;overflow-y:auto;
-  border:1px solid var(--border);border-radius:6px;}
-.inv-table{width:100%;border-collapse:collapse;font-size:12px;}
-.inv-table thead tr{background:var(--accent);color:#fff;position:sticky;top:0;z-index:1;}
-.inv-table th{padding:9px 12px;text-align:right;font-weight:600;white-space:nowrap;cursor:pointer;user-select:none;}
-.inv-table th:first-child{text-align:left;}
-.inv-table th .sort-icon{margin-left:4px;opacity:.7;font-size:10px;}
-.inv-table tbody tr:nth-child(even){background:var(--bg);}
-.inv-table tbody tr:hover{background:#e8f4fd;}
-.inv-table td{padding:7px 12px;border-bottom:1px solid var(--border);text-align:right;}
-.inv-table td:first-child{text-align:left;font-weight:500;}
-.inv-table tfoot tr{background:var(--accent);color:#fff;font-weight:700;}
-.inv-table tfoot td{padding:9px 12px;}
-.inv-table tfoot td:first-child{text-align:left;}
-.inv-profit{color:var(--green);font-weight:600;}
 </style>
 </head>
 <body>
@@ -577,31 +555,6 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
         <div class="chart-card">
           <div class="chart-title">3-Month Moving Average</div>
           <div class="chart-canvas-wrap" style="height:280px;"><canvas id="chart-moving-avg"></canvas></div>
-        </div>
-      </div>
-
-      <!-- Inventory Table -->
-      <div class="chart-card fade-in" style="margin-top:12px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-          <div class="chart-title" style="margin-bottom:0;">📦 Current Inventory Valuation</div>
-        </div>
-        <div class="inv-search-wrap">
-          <input type="text" id="inv-search" placeholder="Search products…" oninput="renderInventoryTable()">
-          <span class="inv-search-count" id="inv-search-count"></span>
-        </div>
-        <div class="inv-table-wrap">
-          <table class="inv-table">
-            <thead><tr>
-              <th onclick="_invSort('name')">Product <span class="sort-icon" id="inv-sort-name">&#x25B2;</span></th>
-              <th onclick="_invSort('boxes')">Boxes <span class="sort-icon" id="inv-sort-boxes"></span></th>
-              <th onclick="_invSort('bottles')">Bottles <span class="sort-icon" id="inv-sort-bottles"></span></th>
-              <th onclick="_invSort('cost')">Total Cost <span class="sort-icon" id="inv-sort-cost"></span></th>
-              <th onclick="_invSort('mrp')">MRP/Box <span class="sort-icon" id="inv-sort-mrp"></span></th>
-              <th onclick="_invSort('profit')">Est. Profit <span class="sort-icon" id="inv-sort-profit"></span></th>
-            </tr></thead>
-            <tbody id="inv-tbody"></tbody>
-            <tfoot><tr id="inv-tfoot"></tr></tfoot>
-          </table>
         </div>
       </div>
 
@@ -1198,7 +1151,6 @@ function renderTab(id){
     safeRender(()=>populateLedgerDropdown(),'ledger-dropdown');
   } else if(id==='forecast'){
     safeRender(()=>renderForecast(invOnly,f),'forecast');
-    safeRender(()=>renderInventoryTable(),'inv-table');
   } else if(id==='insights'){
     safeRender(()=>renderStockCover(f),'stock-cover');
     safeRender(()=>renderPurchVsSales(f),'purch-vs-sales');
@@ -2079,8 +2031,8 @@ function chip(el){document.getElementById('ap-input').value=el.textContent;ask()
 function buildLightSchema(){if(!DATA)return'No data loaded.';const so=DATA.stock_out||[],ss=DATA.sales_summary||[],prods=DATA.products||[],custs=DATA.customers||[];const invSS=ss.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-'));const rev=invSS.reduce((s,r)=>s+(+r.total_bill||0),0);const allDates=so.map(r=>r.sale_date).filter(Boolean).sort();const dr=allDates.length?allDates[0]+' to '+allDates[allDates.length-1]:'All time';return'=== GS AGENCIES ===\nDate: '+dr+' | Customers: '+custs.length+' | Products: '+prods.length+' | Invoices: '+invSS.length+'\nRevenue: Rs'+Math.round(rev/1000)+'K\n'+'Stock: '+prods.map(p=>p.product_name+':'+p.current_stock).join(', ');}
 
 function buildSchemaBlock(){if(!DATA)return'No data loaded.';const so=DATA.stock_out||[],ss=DATA.sales_summary||[],prods=DATA.products||[],custs=DATA.customers||[],exp=DATA.expenses||[],f=window._f||{};const invSS=ss.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-'));const paySS=ss.filter(r=>String(r.reference_invoice_id||'').startsWith('PAY-'));const cl={};custs.forEach(c=>{cl[c.customer_name]=c.location||'Unknown';});const allDates=so.map(r=>r.sale_date).filter(Boolean).sort();const days=f.from&&f.to?Math.max(1,Math.round((new Date(f.to)-new Date(f.from))/86400000)+1):allDates.length?Math.max(1,Math.round((new Date(allDates[allDates.length-1])-new Date(allDates[0]))/86400000)+1):90;const rev=invSS.reduce((s,r)=>s+(+r.total_bill||0),0);const gp=so.reduce((s,r)=>s+((+r.total_sale||0)-(+r.buying_rate_at_time||0)),0);const coll=ss.reduce((s,r)=>s+(+r.cash_received||0)+(+r.upi_received||0),0);const mRev={},mGP={},mInv={};invSS.forEach(r=>{const m=r.sale_date?.slice(0,7);if(!m)return;mRev[m]=(mRev[m]||0)+(+r.total_bill||0);mInv[m]=(mInv[m]||0)+1;});so.forEach(r=>{const m=r.sale_date?.slice(0,7);if(!m)return;mGP[m]=(mGP[m]||0)+((+r.total_sale||0)-(+r.buying_rate_at_time||0));});const mLines=Object.keys(mRev).sort().slice(-18).map(m=>'  '+m+': rev=Rs'+Math.round(mRev[m]/1000)+'K gp=Rs'+Math.round((mGP[m]||0)/1000)+'K inv='+mInv[m]).join('\n');const tp={};invSS.forEach(r=>{tp[r.reference_invoice_id]=Math.max(0,(+r.total_bill||0)-(+r.discount_amount||0)-(+r.cash_received||0)-(+r.upi_received||0));});paySS.forEach(r=>{const ref=r.reference_invoice||'';if(ref&&tp[ref]!==undefined)tp[ref]=Math.max(0,tp[ref]-((+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0)));});const owedMap={};invSS.forEach(r=>{const v=tp[r.reference_invoice_id]||0;if(v>0.5)owedMap[r.customer_name]=(owedMap[r.customer_name]||0)+v;});const owedLines=Object.entries(owedMap).sort((a,b)=>b[1]-a[1]).slice(0,20).map(([n,v])=>'  '+n+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\n');const pRev={},pQty={};so.forEach(r=>{pRev[r.product_name]=(pRev[r.product_name]||0)+(+r.total_sale||0);pQty[r.product_name]=(pQty[r.product_name]||0)+(+r.quantity||0);});const prodLines=prods.map(p=>{const rate=(pQty[p.product_name]||0)/days;const cv=rate>0?Math.round((+p.current_stock||0)/rate):null;return'  '+p.product_name+': stock='+p.current_stock+' pack='+p.pack_size+(cv!==null?' cover~'+cv+'d':'');}).join('\n');const locRev={},locInv={};invSS.forEach(r=>{const l=cl[r.customer_name]||'Unknown';locRev[l]=(locRev[l]||0)+(+r.total_bill||0);locInv[l]=(locInv[l]||0)+1;});const locLines=Object.entries(locRev).sort((a,b)=>b[1]-a[1]).map(([l,v])=>'  '+l+': Rs'+Math.round(v/1000)+'K inv='+locInv[l]).join('\n');const expMap={};exp.forEach(r=>{expMap[r.spent_on]=(expMap[r.spent_on]||0)+(+r.total_expense||0);});const expLines=Object.entries(expMap).sort((a,b)=>b[1]-a[1]).map(([k,v])=>'  '+k+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\n');const dr=allDates.length?(f.from||allDates[0])+' to '+(f.to||allDates[allDates.length-1]):'All time';return'=== GS AGENCIES SNAPSHOT ===\nDate: '+dr+' | Customers: '+custs.length+' | Products: '+prods.length+'\nRevenue: Rs'+Math.round(rev/1000)+'K | GP: Rs'+Math.round(gp/1000)+'K | Collected: Rs'+Math.round(coll/1000)+'K\n\n--- MONTHLY ---\n'+mLines+'\n\n--- OUTSTANDING ---\n'+owedLines+'\n\n--- LOCATIONS ---\n'+locLines+'\n\n--- PRODUCTS ---\n'+prodLines+'\n\n--- EXPENSES ---\n'+(expLines||'  None');}
-function dataSchema(){return 'DATA.stock_out[]: sale_date,invoice_id,customer_name,product_name,quantity,total_sale,buying_rate_at_time\nDATA.sales_summary[]: reference_invoice_id(INV-/SYS-=invoice, PAY-=payment),reference_invoice(for PAY rows: parent invoice id),sale_date,customer_name,total_bill,discount_amount,cash_received,upi_received,balance_due(WARNING: balance_due on INV rows is STALE - do not use directly)\nDATA.products[]: product_name,current_stock,pack_size\nDATA.customers[]: customer_name,location\nDATA.stock_in[]: transaction_date,product_id,quantity,unit_cost,total_cost\nDATA.expenses[]: expense_date,spent_on,total_expense\ncustLocMap: const cl={}; DATA.customers.forEach(c=>cl[c.customer_name]=c.location||"Unknown");\n\nPRE-BUILT HELPERS (always use these instead of manual balance_due checks):\n  getPendingInvoices(customerName) -> [{invoice_id,physical_no,date,billed,due}] uses correct tpLedger logic\n  getCustomerOutstanding(customerName) -> {customer,total_outstanding,invoice_count}\n  getAllOutstanding() -> [{customer,outstanding}] sorted desc - use for who owes most';}
-function sandboxExec(code){try{const fn=new Function('DATA','custLocMap','"use strict";\n'+code);const cl={};DATA.customers.forEach(c=>{cl[c.customer_name]=c.location||'Unknown';});const r=fn(DATA,cl);if(r===undefined)return{result:'(no return)'};if(typeof r==='object')return{result:JSON.stringify(r,null,2)};return{result:String(r)};}catch(e){return{error:e.message};}}
+function dataSchema(){const expDate=(DATA&&DATA.exported_at)?DATA.exported_at:'unknown';return 'DATA.stock_out[]: sale_date,invoice_id,customer_name,product_name,quantity,unit_price,total_sale,buying_rate_at_time\n'+'DATA.sales_summary[]: reference_invoice_id(PAY-prefix=payment),reference_invoice(parent invoice for PAY rows),sale_date,customer_name,total_bill,discount_amount,cash_received,upi_received\n'+'DATA.products[]: product_name,current_stock,pack_size,cost_price_unit(cost PER UNIT),selling_price_unit(sell price PER UNIT),pack_cost(per PACK - do NOT use for unit stock value)\n'+'DATA.customers[]: customer_name,location\n'+'DATA.stock_in[]: transaction_date,product_id,quantity,unit_cost,total_cost\n'+'DATA.expenses[]: expense_date,spent_on,cash_expense,online_expense,total_expense\n'+'custLocMap: already declared in scope — do NOT redeclare\n'+'getPendingInvoices/getCustomerOutstanding/getAllOutstanding: available in scope\n'+'DATA EXPORTED: '+expDate+' — use as today for date math\n'+'RULES: stock value = current_stock*cost_price_unit | sales growth = only products in BOTH periods | collection rate = sum(cash+upi)/sum(total_bill) per location';}
+function sandboxExec(code){try{const _cl={};DATA.customers.forEach(c=>{_cl[c.customer_name]=c.location||'Unknown';});const _pre='const custLocMap='+JSON.stringify(_cl)+';\n';const fn=new Function('DATA','getPendingInvoices','getCustomerOutstanding','getAllOutstanding','"use strict";\n'+_pre+code);const r=fn(DATA,getPendingInvoices,getCustomerOutstanding,getAllOutstanding);if(r===undefined)return{result:'(no return)'};if(typeof r==='object')return{result:JSON.stringify(r,null,2)};return{result:String(r)};}catch(e){return{error:e.message};}}
 function extractCode(t){const m1=t.match(/<execute_js>([\s\S]*?)<\/execute_js>/i);if(m1)return m1[1].trim();const m2=t.match(/```(?:javascript|js)\s*([\s\S]*?)```/i);if(m2)return m2[1].trim();const m3=t.match(/```\s*([\s\S]*?)```/);if(m3&&(m3[1].includes('return ')||m3[1].includes('DATA.')))return m3[1].trim();return null;}
 function _msg(role,text,cls){const box=document.getElementById('ap-msgs');const el=document.createElement('div');el.className='am '+role+(cls?' '+cls:'');el.textContent=text;box.appendChild(el);box.scrollTop=box.scrollHeight;return el;}
 // ── Pre-built helpers for the LLM to call ────────────────
@@ -2088,27 +2040,30 @@ function _msg(role,text,cls){const box=document.getElementById('ap-msgs');const 
 // doesn't need to re-implement it and get it wrong.
 
 function getPendingInvoices(customerName){
-  // Returns array of {invoice_id, physical_no, date, billed, due}
-  // where due is computed via tpLedger (reference_invoice matching)
   const ss=DATA.sales_summary||[];
-  const custRows=customerName?ss.filter(r=>r.customer_name===customerName):ss;
-  const invRows=custRows.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-'));
-  const payRows=custRows.filter(r=> String(r.reference_invoice_id||'').startsWith('PAY-'));
+  const filterCust=(customerName&&customerName!=='null');
+  const invRows=ss.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-')
+    &&(!filterCust||r.customer_name===customerName));
   const tp={};
   invRows.forEach(r=>{
     tp[r.reference_invoice_id]=Math.max(0,
       (+r.total_bill||0)-(+r.discount_amount||0)-(+r.cash_received||0)-(+r.upi_received||0));
   });
-  payRows.forEach(r=>{
+  ss.filter(r=>String(r.reference_invoice_id||'').startsWith('PAY-')).forEach(r=>{
     const ref=r.reference_invoice||'';
-    if(ref&&tp[ref]!==undefined){
-      const paid=(+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0);
-      tp[ref]=Math.max(0,tp[ref]-paid);
-    }
+    if(ref&&tp[ref]!==undefined)
+      tp[ref]=Math.max(0,tp[ref]-((+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0)));
   });
   return invRows
     .filter(r=>(tp[r.reference_invoice_id]||0)>0.5)
-    .map(r=>({invoice_id:r.reference_invoice_id, physical_no:r.physical_invoice_no||'-', date:r.sale_date, billed:r.total_bill, due:Math.round(tp[r.reference_invoice_id])}))
+    .map(r=>({
+      invoice_id:r.reference_invoice_id,
+      customer_name:r.customer_name||'',
+      physical_no:r.physical_invoice_no||'-',
+      date:r.sale_date,
+      billed:r.total_bill,
+      due:Math.round(tp[r.reference_invoice_id])
+    }))
     .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
 }
 
@@ -2136,90 +2091,107 @@ async function ask(){
   inp.value='';document.getElementById('ap-send').disabled=true;
   _msg('user',q);const loader=_msg('ai','Thinking...','loading');
   _history.push({role:'user',content:q});
-  const codeSys='You are a data analyst for GS Agencies, Pepsi distributor in Konkan/Sindhudurg.\n\nDATA SCHEMA:\n'+dataSchema()+'\n\nCONTEXT:\n'+(_currentProvider==='gemini'&&_getModel().startsWith('gemma')?buildLightSchema():buildSchemaBlock())+'\n\nCRITICAL RULES:\n1. For ANY computation/data question write JS code inside <execute_js>...</execute_js> tags.\n2. Code runs with DATA and custLocMap available. MUST end with a return statement.\n3. Inside the tags put ONLY valid JavaScript. No explanations, no thoughts, no markdown fences.\n4. For greetings or message drafts only: answer directly without code tags.\n\nEXAMPLE (most sold product to a customer):\n<execute_js>\nconst rows=DATA.stock_out.filter(r=>r.customer_name==="BKC canteen");\nconst m={};rows.forEach(r=>{m[r.product_name]=(m[r.product_name]||0)+(+r.quantity||0);});\nconst s=Object.entries(m).sort((a,b)=>b[1]-a[1]);\nreturn s.slice(0,5).map(([p,q])=>p+": "+q+" units").join("\n");\n</execute_js>';
+  const codeSys='You are a data analyst for GS Agencies, Pepsi distributor in Konkan/Sindhudurg.\n\nDATA SCHEMA:\n'+dataSchema()+'\n\nCONTEXT:\n'+buildSchemaBlock()+'\n\nCRITICAL RULES:\n1. For ANY computation/data question write JS code inside <execute_js>...</execute_js> tags.\n2. Code runs with DATA and custLocMap available. MUST end with a return statement.\n3. Inside the tags put ONLY valid JavaScript. No explanations, no thoughts, no markdown fences.\n4. For greetings or message drafts only: answer directly without code tags.\n\nEXAMPLE (most sold product to a customer):\n<execute_js>\nconst rows=DATA.stock_out.filter(r=>r.customer_name==="BKC canteen");\nconst m={};rows.forEach(r=>{m[r.product_name]=(m[r.product_name]||0)+(+r.quantity||0);});\nconst s=Object.entries(m).sort((a,b)=>b[1]-a[1]);\nreturn s.slice(0,5).map(([p,q])=>p+": "+q+" units").join("\n");\n</execute_js>';
+  // ── Helper: call Gemini API (same key, different model) ─────────────
+  const _geminiKey=localStorage.getItem('gs_gemini_key')||'';
+  const _groqKey=localStorage.getItem('gs_groq_key')||'';
+  async function _callGemini(model,msgs,maxTok){
+    return _PROVIDERS.gemini.call(msgs,_geminiKey,model,maxTok);
+  }
+  async function _callGroq(msgs,maxTok){
+    return _PROVIDERS.groq.call(msgs,_groqKey,'llama-3.3-70b-versatile',maxTok);
+  }
+
+  // ── STEP 1: Code generation — Groq primary, Gemini Flash fallback ────
+  const _codePrompt=[{role:'system',content:codeSys},..._history.slice(-6)];
+  let step1='';
+  let code=null;
   try{
     loader.textContent='Analysing...';
-    const step1=await _prov().call([{role:'system',content:codeSys},..._history.slice(-6)],key,_getModel(),900);
-    const code=extractCode(step1);
-    if(!code){
-      loader.textContent=step1;loader.className='am ai';_history.push({role:'assistant',content:step1});
-    } else {
-      loader.textContent='Running query...';
-      const {result,error}=sandboxExec(code);
-      let ans;
-      if(error){
-        const retry=await _prov().call([{role:'system',content:codeSys},..._history.slice(-6),{role:'assistant',content:step1},{role:'user',content:'Code error: '+error+'. Fix or answer without code.'}],key,_getModel(),900);
-        const c2=extractCode(retry);if(c2){const{result:r2,error:e2}=sandboxExec(c2);ans=e2?'Error: '+e2:r2;}else ans=retry;
-      } else {
-        loader.textContent='Interpreting...';
-        ans=await _prov().call([{role:'system',content:'Business analyst for GS Agencies. Convert raw data result to clear plain-English answer. Use Rs for currency. Reply in same language as user.'},{role:'user',content:'Question: '+q+'\n\nResult:\n'+result}],key,_getModel(),500);
+    if(!_groqKey) throw new Error('no groq key');
+    step1=await _callGroq(_codePrompt,900);
+    code=extractCode(step1);
+  }catch(e1){
+    // Groq failed — try Gemini 2.5 Flash for code generation
+    if(_geminiKey){
+      try{
+        loader.textContent='Groq unavailable — trying Gemini Flash...';
+        step1=await _callGemini('gemini-2.5-flash',_codePrompt,900);
+        code=extractCode(step1);
+      }catch(e2){
+        loader.textContent='All code generation models failed.'; loader.className='am ai err';
+        _history.pop(); document.getElementById('ap-send').disabled=false; return;
       }
-      loader.textContent=ans;loader.className='am ai';_history.push({role:'assistant',content:ans});
+    } else {
+      loader.textContent='Groq failed and no Gemini key saved.'; loader.className='am ai err';
+      _history.pop(); document.getElementById('ap-send').disabled=false; return;
     }
+  }
+
+  if(!code){
+    // No code — direct conversational answer
+    loader.textContent=step1; loader.className='am ai';
+    _history.push({role:'assistant',content:step1});
     if(_history.length>12)_history=_history.slice(-12);
-  }catch(e){loader.textContent='Error: '+e.message;loader.className='am ai err';_history.pop();}
+    document.getElementById('ap-send').disabled=false; return;
+  }
+
+  // ── STEP 2: Execute code in browser sandbox ───────────────────────────
+  loader.textContent='Running query...';
+  let {result,error}=sandboxExec(code);
+
+  if(error){
+    // Code errored — retry code generation with same model
+    try{
+      const _fix=await _callGroq([{role:'system',content:codeSys},..._history.slice(-6),
+        {role:'assistant',content:step1},
+        {role:'user',content:'Code error: '+error+'. Fix it.'}],900);
+      const _c2=extractCode(_fix);
+      if(_c2){const _s2=sandboxExec(_c2);if(!_s2.error){result=_s2.result;error=null;}}
+    }catch(e){}
+    if(error){
+      loader.textContent='Could not execute query: '+error; loader.className='am ai err';
+      _history.pop(); document.getElementById('ap-send').disabled=false; return;
+    }
+  }
+
+  // ── STEP 3: Format result — Gemma → Flash-Lite → Flash → raw ─────────
+  const _fmtPrompt=[
+    {role:'system',content:'You are a business analyst. Format this raw data result as a clear, readable answer. Use Rs for currency. No preamble.'},
+    {role:'user',content:'Q: '+q+'\n\nResult:\n'+result}
+  ];
+  let ans=null;
+
+  if(_geminiKey){
+    // Try Gemma 4 26B first
+    try{
+      loader.textContent='Formatting...';
+      ans=await _callGemini('gemma-4-26b-a4b-it',_fmtPrompt,2000);
+    }catch(e1){
+      // Gemma failed — try Flash-Lite
+      try{
+        loader.textContent='Gemma busy — trying Flash-Lite...';
+        ans=await _callGemini('gemini-2.5-flash-lite',_fmtPrompt,2000);
+      }catch(e2){
+        // Flash-Lite failed — try Flash
+        try{
+          loader.textContent='Trying Gemini Flash...';
+          ans=await _callGemini('gemini-2.5-flash',_fmtPrompt,2000);
+        }catch(e3){
+          ans=null; // All Gemini failed — fall through to raw
+        }
+      }
+    }
+  }
+
+  // Last resort: show raw result
+  if(!ans) ans=result;
+
+  loader.textContent=ans; loader.className='am ai';
+  _history.push({role:'assistant',content:ans});
+  if(_history.length>12)_history=_history.slice(-12);
   document.getElementById('ap-send').disabled=false;
 }
-
-// ══════════════════════════════════════════════
-// INVENTORY VALUATION TABLE
-// ══════════════════════════════════════════════
-let _invSortCol='name', _invSortAsc=true;
-function _invSort(col){
-  _invSortAsc=(_invSortCol===col)?!_invSortAsc:(col==='name');
-  _invSortCol=col;
-  renderInventoryTable();
-}
-function renderInventoryTable(){
-  if(!DATA||!DATA.products) return;
-  const q=(document.getElementById('inv-search')?.value||'').toLowerCase().trim();
-  const rows=(DATA.products)
-    .filter(p=>(p.product_name||'').toLowerCase().includes(q))
-    .map(p=>{
-      const stock=+p.current_stock||0;
-      const pack=+p.pack_size||1;
-      const cu=+p.cost_price_unit||0;
-      const su=+p.selling_price_unit||0;
-      return{
-        name:p.product_name||'',
-        boxes:Math.floor(stock/pack),
-        bottles:stock%pack,
-        cost:Math.round(stock*cu),
-        mrp:Math.round(su*pack),
-        profit:Math.round(stock*su)-Math.round(stock*cu)
-      };
-    });
-  rows.sort((a,b)=>{
-    const av=a[_invSortCol],bv=b[_invSortCol];
-    if(typeof av==='string') return _invSortAsc?av.localeCompare(bv):bv.localeCompare(av);
-    return _invSortAsc?av-bv:bv-av;
-  });
-  ['name','boxes','bottles','cost','mrp','profit'].forEach(c=>{
-    const el=document.getElementById('inv-sort-'+c);
-    if(el) el.textContent=_invSortCol===c?(_invSortAsc?'\u25B2':'\u25BC'):'';
-  });
-  const tbody=document.getElementById('inv-tbody');
-  if(!tbody) return;
-  tbody.innerHTML=rows.map(r=>`<tr>
-    <td>${r.name}</td>
-    <td>${r.boxes.toLocaleString('en-IN')}</td>
-    <td>${r.bottles.toLocaleString('en-IN')}</td>
-    <td>${fmt(r.cost)}</td>
-    <td>${fmt(r.mrp)}</td>
-    <td class="${r.profit>=0?'inv-profit':''}">${fmt(r.profit)}</td>
-  </tr>`).join('');
-  const tfoot=document.getElementById('inv-tfoot');
-  if(tfoot) tfoot.innerHTML=`
-    <td>TOTAL (${rows.length} products)</td>
-    <td>${rows.reduce((s,r)=>s+r.boxes,0).toLocaleString('en-IN')}</td>
-    <td>${rows.reduce((s,r)=>s+r.bottles,0).toLocaleString('en-IN')}</td>
-    <td>${fmt(rows.reduce((s,r)=>s+r.cost,0))}</td>
-    <td>&#x2014;</td>
-    <td class="${rows.reduce((s,r)=>s+r.profit,0)>=0?'inv-profit':''}">${fmt(rows.reduce((s,r)=>s+r.profit,0))}</td>`;
-  const cnt=document.getElementById('inv-search-count');
-  if(cnt) cnt.textContent=q?`${rows.length} of ${DATA.products.length} products`:`${DATA.products.length} products`;
-}
-
 </script>
 <!-- AI Agent -->
 <div id="agent-overlay" onclick="closeAgent()"></div>
