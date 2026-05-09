@@ -2040,27 +2040,31 @@ function _msg(role,text,cls){const box=document.getElementById('ap-msgs');const 
 // doesn't need to re-implement it and get it wrong.
 
 function getPendingInvoices(customerName){
-  // Returns array of {invoice_id, physical_no, date, billed, due}
-  // where due is computed via tpLedger (reference_invoice matching)
   const ss=DATA.sales_summary||[];
-  const custRows=(customerName&&customerName!=='null')?ss.filter(r=>r.customer_name===customerName):ss;
-  const invRows=custRows.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-'));
-  const payRows=custRows.filter(r=> String(r.reference_invoice_id||'').startsWith('PAY-'));
+  const filterCust=(customerName&&customerName!=='null');
+  const invRows=ss.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-')
+    &&(!filterCust||r.customer_name===customerName));
   const tp={};
   invRows.forEach(r=>{
     tp[r.reference_invoice_id]=Math.max(0,
       (+r.total_bill||0)-(+r.discount_amount||0)-(+r.cash_received||0)-(+r.upi_received||0));
   });
-  payRows.forEach(r=>{
+  ss.filter(r=>String(r.reference_invoice_id||'').startsWith('PAY-')).forEach(r=>{
     const ref=r.reference_invoice||'';
     if(ref&&tp[ref]!==undefined){
-      const paid=(+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0);
-      tp[ref]=Math.max(0,tp[ref]-paid);
+      tp[ref]=Math.max(0,tp[ref]-((+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0)));
     }
   });
   return invRows
     .filter(r=>(tp[r.reference_invoice_id]||0)>0.5)
-    .map(r=>({invoice_id:r.reference_invoice_id, physical_no:r.physical_invoice_no||'-', date:r.sale_date, billed:r.total_bill, due:Math.round(tp[r.reference_invoice_id])}))
+    .map(r=>({
+      invoice_id:r.reference_invoice_id,
+      customer_name:r.customer_name||'',
+      physical_no:r.physical_invoice_no||'-',
+      date:r.sale_date,
+      billed:r.total_bill,
+      due:Math.round(tp[r.reference_invoice_id])
+    }))
     .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
 }
 
@@ -2088,27 +2092,67 @@ async function ask(){
   inp.value='';document.getElementById('ap-send').disabled=true;
   _msg('user',q);const loader=_msg('ai','Thinking...','loading');
   _history.push({role:'user',content:q});
-  const _isGemma=_currentProvider==='gemini'&&_getModel().startsWith('gemma');const _schema=_isGemma?'DATA.stock_out[]:sale_date,customer_name,product_name,quantity,total_sale,buying_rate_at_time\nDATA.sales_summary[]:reference_invoice_id(PAY-prefix=payment),reference_invoice(parent invoice for PAY rows),sale_date,customer_name,total_bill,discount_amount,cash_received,upi_received\nDATA.products[]:product_name,current_stock,pack_size\nDATA.customers[]:customer_name,location\nDATA.stock_in[]:transaction_date,product_id,quantity,unit_cost,total_cost\ncustLocMap:pre-built location lookup':dataSchema();const _ctx=_isGemma?buildLightSchema():buildSchemaBlock();const codeSys='You are a data analyst for GS Agencies, Pepsi distributor.\n\nSCHEMA:\n'+_schema+'\n\nCONTEXT:\n'+_ctx+'\n\nAVAILABLE HELPERS (use these for receivables):\ngetPendingInvoices(custName) - returns [{invoice_id,date,customer_name,billed,due}] with correct tpLedger calc. Pass null for all customers.\ngetCustomerOutstanding(custName) - returns {customer,total_outstanding,invoice_count}\ngetAllOutstanding() - returns [{customer,outstanding}] sorted desc\n\nRULES:\n1. ALWAYS use <execute_js>...code...return result;</execute_js> for data questions.\n2. For pending/unpaid invoices ALWAYS use getPendingInvoices() - never compute tpLedger manually.\n3. Only plain text reply for greetings or message drafts.\n\nEXAMPLES:\nQ:unpaid invoices Jan 2026\n<execute_js>\nconst p=getPendingInvoices(null).filter(r=>r.date&&r.date.startsWith(\'2026-01\'));\nreturn p.map(r=>r.date+\' | \'+r.invoice_id+\' | \'+r.customer_name+\' | Rs\'+r.due).join(\'\\n\')+\'\\nTotal: \'+p.length+\' invoices Rs\'+p.reduce((s,r)=>s+r.due,0);\n</execute_js>\nQ:most sold product to BKC canteen\n<execute_js>\nconst m={};DATA.stock_out.filter(x=>x.customer_name===\'BKC canteen\').forEach(x=>{m[x.product_name]=(m[x.product_name]||0)+(+x.quantity||0);});\nreturn Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([p,q])=>p+\': \'+q+\' units\').join(\'\\n\');\n</execute_js>';
+  const _isGemma=_currentProvider==='gemini'&&_getModel().startsWith('gemma');const _schema=_isGemma?'DATA.stock_out[]:sale_date,customer_name,product_name,quantity,total_sale,buying_rate_at_time\nDATA.sales_summary[]:reference_invoice_id(PAY-prefix=payment),reference_invoice(parent invoice),sale_date,customer_name,total_bill,discount_amount,cash_received,upi_received\nDATA.products[]:product_name,current_stock,pack_size\nDATA.customers[]:customer_name,location\ncustLocMap:pre-built location lookup':dataSchema();const _ctx=_isGemma?buildLightSchema():buildSchemaBlock();const codeSys='You are a data analyst for GS Agencies, Pepsi distributor.\n\nSCHEMA:\n'+_schema+'\n\nCONTEXT:\n'+_ctx+'\n\nHELPERS (use these — do not recompute manually):\ngetPendingInvoices(custName|null) -> [{invoice_id,customer_name,date,billed,due}]\ngetAllOutstanding() -> [{customer,outstanding}]\n\nRULES: Use <execute_js>...return value;</execute_js> for ALL data questions. Never answer from context. Greetings/drafts only: no code.\n\nEXAMPLE:\n<execute_js>\nconst p=getPendingInvoices(null).filter(r=>r.date&&r.date.startsWith(\'2026-03\'));\nreturn p.map(r=>r.date+\'|\'+r.invoice_id+\'|\'+r.customer_name+\'|Rs\'+r.due).join(\'\\n\')+\'\\nTotal:\'+p.length+\'invoices Rs\'+p.reduce((s,r)=>s+r.due,0);\n</execute_js>';
   try{
+    // ── Step 1: Code generation (current model — Gemma or Groq) ──────
     loader.textContent='Analysing...';
-    const step1=await _prov().call([{role:'system',content:codeSys},..._history.slice(-6)],key,_getModel(),900);
-    const code=extractCode(step1);
+    const _isGemmaReq=_currentProvider==='gemini'&&_getModel().startsWith('gemma');
+    let step1=await _prov().call([{role:'system',content:codeSys},..._history.slice(-6)],key,_getModel(),900);
+    let code=extractCode(step1);
+
+    // ── Auto-fallback: if Gemma produced no code, retry with Groq ────
+    if(_isGemmaReq&&!code){
+      const _gk=localStorage.getItem('gs_groq_key');
+      if(_gk){
+        loader.textContent='Retrying with Groq...';
+        step1=await _PROVIDERS.groq.call([{role:'system',content:codeSys},..._history.slice(-6)],_gk,'llama-3.3-70b-versatile',900);
+        code=extractCode(step1);
+      }
+    }
+
     if(!code){
+      // No code — direct answer
       loader.textContent=step1;loader.className='am ai';_history.push({role:'assistant',content:step1});
     } else {
+      // ── Step 2: Execute code ─────────────────────────────────────
       loader.textContent='Running query...';
-      const {result,error}=sandboxExec(code);
+      let {result,error}=sandboxExec(code);
+
+      // If result has undefined fields (wrong field names), retry with Groq
+      if(_isGemmaReq&&result&&result.includes('undefined')){
+        const _gk=localStorage.getItem('gs_groq_key');
+        if(_gk){
+          loader.textContent='Fixing with Groq...';
+          const _r2=await _PROVIDERS.groq.call([{role:'system',content:codeSys},..._history.slice(-6)],_gk,'llama-3.3-70b-versatile',900);
+          const _c2=extractCode(_r2);
+          if(_c2){const _s2=sandboxExec(_c2);if(!_s2.error)result=_s2.result;}
+        }
+      }
+
       let ans;
       if(error){
-        const retry=await _prov().call([{role:'system',content:codeSys},..._history.slice(-6),{role:'assistant',content:step1},{role:'user',content:'Code error: '+error+'. Fix or answer without code.'}],key,_getModel(),900);
-        const c2=extractCode(retry);if(c2){const{result:r2,error:e2}=sandboxExec(c2);ans=e2?'Error: '+e2:r2;}else ans=retry;
-      } else {
-        if(_currentProvider==='gemini'&&_getModel().startsWith('gemma')){
-          ans=result; // Gemma: skip slow second call, return raw result directly
+        ans='Code error: '+error;
+      } else if(_isGemmaReq){
+        // ── Gemma path: raw result → Groq interprets (tiny input only) ─
+        // Groq only receives: question + raw result (~300 chars max)
+        // No schema, no context — minimal token cost
+        const _gk=localStorage.getItem('gs_groq_key');
+        if(_gk){
+          loader.textContent='Formatting with Groq...';
+          ans=await _PROVIDERS.groq.call([
+            {role:'system',content:'You are a business analyst. Format this raw data result as a clear, readable answer. Use Rs for currency. No preamble.'},
+            {role:'user',content:'Q: '+q+'\n\nRaw result:\n'+result}
+          ],_gk,'llama-3.3-70b-versatile',2000);
         } else {
-          loader.textContent='Interpreting...';
-          ans=await _prov().call([{role:'system',content:'Business analyst for GS Agencies. Convert raw data result to clear plain-English answer. Use Rs for currency. Reply in same language as user.'},{role:'user',content:'Question: '+q+'\n\nResult:\n'+result}],key,_getModel(),2000);
+          ans=result; // No Groq key — show raw result
         }
+      } else {
+        // ── Groq/Gemini path: interpret with same model ───────────────
+        loader.textContent='Interpreting...';
+        ans=await _prov().call([
+          {role:'system',content:'Business analyst for GS Agencies. Format raw result as a clear answer. Use Rs for currency. Reply in same language as user.'},
+          {role:'user',content:'Q: '+q+'\n\nResult:\n'+result}
+        ],key,_getModel(),2000);
       }
       loader.textContent=ans;loader.className='am ai';_history.push({role:'assistant',content:ans});
     }
