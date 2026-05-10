@@ -22,6 +22,32 @@ if(typeof Chart === "undefined") {
   --red:#e74c3c; --teal:#1abc9c; --purple:#8e44ad;
   --navy:#1a5276; --card-r:10px; --shadow:0 2px 8px rgba(0,0,0,0.06);
 }
+body{transition:background .2s,color .2s;}
+.dark-mode {
+  --bg:#0f1117; --card:#1a1d27; --border:#2a2d3a;
+  --text:#e2e8f0; --dim:#8892a4; --accent:#93c5fd;
+  --blue:#60a5fa; --green:#34d399; --orange:#fb923c;
+  --red:#f87171; --teal:#2dd4bf; --purple:#c084fc;
+  --navy:#93c5fd; --shadow:0 2px 8px rgba(0,0,0,0.4);
+}
+.dark-mode .upload-zone{background:rgba(96,165,250,0.06);}
+.dark-mode .filter-row input,.dark-mode .filter-row select{background:var(--card);color:var(--text);border-color:var(--border);}
+.dark-mode .cd-panel{background:var(--card);border-color:var(--border);}
+.dark-mode .cd-search{background:var(--bg);color:var(--text);border-color:var(--border);}
+.dark-mode .inv-table tbody tr:hover{background:#2a2d3a;}
+.dark-mode .inv-table tbody tr:nth-child(even){background:#14161f;}
+.dark-mode #ap-key,.dark-mode #ap-input{background:var(--card);color:var(--text);border-color:var(--border);}
+.dark-mode .am.ai{background:#1e2130;}
+.dark-mode .am.user{background:rgba(96,165,250,0.1);}
+.dark-mode .forecast-note{background:#1a1d27;}
+.dark-mode .tag-forecast{background:#1e2130;}
+.dark-mode .cached-banner{background:#1e2130;border-color:var(--border);}
+/* Dark mode toggle button */
+#dark-toggle{background:none;border:1px solid var(--border);border-radius:20px;
+  padding:4px 10px;font-size:13px;cursor:pointer;color:var(--dim);
+  transition:all .15s;white-space:nowrap;}
+#dark-toggle:hover{background:var(--bg);}
+:root {}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
 
@@ -137,8 +163,10 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
   .top-bar{padding:6px 12px;gap:4px;}
   .top-bar h1{font-size:13px;}
   .filter-row{display:none;flex-direction:column;align-items:stretch;gap:6px;
-    padding:8px 0 4px;}
+    padding:8px 0 4px;width:100%;}
   .filter-row.open{display:flex;}
+  #dark-toggle{font-size:16px;padding:5px 8px;}
+  #agent-btn{font-size:12px;padding:5px 10px;}
   .filter-row input,.filter-row select{width:100%;font-size:13px;padding:7px 8px;}
   .filter-row input[type="date"]{width:100%;}
   #filter-toggle{display:block;}
@@ -415,6 +443,10 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
       <button class="btn btn-blue btn-sm" onclick="applyFilters()">Apply</button>
       <button class="btn btn-outline btn-sm" onclick="showUpload()">📂 Data</button>
       <button class="btn btn-outline btn-sm" onclick="clearCacheAndReload()" title="Fetch latest data from GitHub">🔄 Refresh</button>
+    </div>
+    <!-- Always visible on mobile: AI button + dark mode toggle -->
+    <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+      <button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
       <button id="agent-btn" onclick="openAgent()">&#x2728; Ask AI</button>
     </div>
   </div>
@@ -2319,6 +2351,22 @@ function renderInventoryTable(){
     ?`${rows.length} of ${DATA.products.length} products`
     :`${DATA.products.length} products`;
 }
+
+
+// ── Dark mode ─────────────────────────────────────────────
+function toggleDark(){
+  const isDark=document.body.classList.toggle('dark-mode');
+  localStorage.setItem('gs_dark_mode', isDark?'1':'0');
+  document.getElementById('dark-toggle').textContent=isDark?'☀️':'🌙';
+}
+// Restore preference on load
+(function(){
+  if(localStorage.getItem('gs_dark_mode')==='1'){
+    document.body.classList.add('dark-mode');
+    const btn=document.getElementById('dark-toggle');
+    if(btn) btn.textContent='☀️';
+  }
+})();
 
 </script>
 <!-- AI Agent -->
