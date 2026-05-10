@@ -42,6 +42,11 @@ body{transition:background .2s,color .2s;}
 .dark-mode .forecast-note{background:#1a1d27;}
 .dark-mode .tag-forecast{background:#1e2130;}
 .dark-mode .cached-banner{background:#1e2130;border-color:var(--border);}
+.dark-mode .calc-field input{background:var(--bg);color:var(--text);}
+.dark-mode .ledger-table tr:nth-child(even){background:rgba(255,255,255,0.03);}
+.dark-mode .chip-red{background:rgba(248,113,113,0.2);}
+.dark-mode .chip-green{background:rgba(52,211,153,0.2);}
+.dark-mode .chip-blue{background:rgba(96,165,250,0.2);}
 /* Dark mode toggle button */
 #dark-toggle{background:none;border:1px solid var(--border);border-radius:20px;
   padding:4px 10px;font-size:13px;cursor:pointer;color:var(--dim);
@@ -110,14 +115,14 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .chart-canvas-wrap canvas{display:block;}
 
 /* ── Alert table ── */
-.alert-card{background:#fff8f0;border:1px solid #f0a500;}
+.alert-card{background:var(--card);border:1px solid var(--orange);}
 .alert-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
 .alert-title{font-size:12px;font-weight:700;color:var(--red);}
 .alert-count{font-size:11px;color:var(--dim);}
 .alert-table{width:100%;border-collapse:collapse;font-size:11px;}
 .alert-table th{background:var(--accent);color:#fff;padding:6px 8px;text-align:left;font-size:10px;font-weight:600;}
-.alert-table td{padding:5px 8px;border-bottom:1px solid #f0e0c8;}
-.alert-table tr:nth-child(even){background:#fef9f0;}
+.alert-table td{padding:5px 8px;border-bottom:1px solid var(--border);color:var(--text);}
+.alert-table tr:nth-child(even){background:var(--bg);}
 .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;}
 .empty-msg{text-align:center;color:var(--dim);padding:40px 20px;font-size:13px;}
 
@@ -259,8 +264,8 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .ledger-table th{background:var(--accent);color:#fff;padding:6px 10px;text-align:left;font-size:10px;font-weight:600;}
 .ledger-table td{padding:5px 10px;border-bottom:1px solid var(--border);}
 .ledger-table tr:nth-child(even){background:var(--bg);}
-.ledger-table tr.pay-row td{background:#e8f5e9;color:#1b5e20;}
-.ledger-table tr.inv-row td{background:#fff;}
+.ledger-table tr.pay-row td{background:rgba(39,174,96,0.12);color:var(--green);}
+.ledger-table tr.inv-row td{background:var(--card);color:var(--text);}
 .ledger-table .due{color:var(--red);font-weight:700;}
 .ledger-table .paid{color:var(--green);font-weight:700;}
 .ledger-select-wrap{margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
@@ -268,29 +273,29 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
   border-radius:4px;background:var(--card);color:var(--text);min-width:200px;}
 .summary-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
 .chip{padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;}
-.chip-red{background:#fde8e8;color:var(--red);}
-.chip-green{background:#e8f5e9;color:var(--green);}
-.chip-blue{background:#eaf4fb;color:var(--blue);}
+.chip-red{background:rgba(231,76,60,0.15);color:var(--red);}
+.chip-green{background:rgba(39,174,96,0.15);color:var(--green);}
+.chip-blue{background:rgba(41,128,185,0.15);color:var(--blue);}
 
 /* ── Restock calculator ────────────────────────────────────── */
 .calc-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:14px;}
 .calc-field label{display:block;font-size:10px;font-weight:700;color:var(--dim);
   text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;}
 .calc-field input{width:100%;padding:8px 10px;font-size:13px;font-family:inherit;
-  border:1px solid var(--border);border-radius:5px;background:#fafafa;color:var(--text);}
-.calc-field input:focus{outline:none;border-color:var(--blue);background:#fff;}
+  border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--text);}
+.calc-field input:focus{outline:none;border-color:var(--blue);background:var(--card);}
 .calc-run{padding:9px 24px;font-size:13px;font-weight:700;background:var(--blue);
   color:#fff;border:none;border-radius:5px;cursor:pointer;transition:background .15s;margin-bottom:14px;}
 .calc-run:hover{background:#2471a3;}
 .calc-note{font-size:11px;color:var(--dim);margin-bottom:12px;line-height:1.6;
-  padding:8px 12px;background:#f8f9fa;border-radius:4px;border-left:3px solid var(--blue);}
+  padding:8px 12px;background:var(--bg);border-radius:4px;border-left:3px solid var(--blue);}
 .restock-table{width:100%;border-collapse:collapse;font-size:12px;}
 .restock-table th{background:var(--accent);color:#fff;padding:7px 10px;text-align:left;font-size:11px;}
 .restock-table td{padding:6px 10px;border-bottom:1px solid var(--border);}
 .restock-table tr:nth-child(even){background:var(--bg);}
 .restock-table .qty-cell{font-weight:700;color:var(--blue);}
 .restock-table .cost-cell{color:var(--green);font-weight:600;}
-.restock-total{margin-top:10px;padding:10px 14px;background:#eaf4fb;border-radius:5px;
+.restock-total{margin-top:10px;padding:10px 14px;background:rgba(41,128,185,0.12);border-radius:5px;
   font-size:13px;font-weight:600;color:var(--accent);}
 @media(max-width:700px){.calc-form{grid-template-columns:1fr 1fr;}}
 
