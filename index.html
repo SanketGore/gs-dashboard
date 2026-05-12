@@ -2169,6 +2169,11 @@ function getAllOutstanding(){
   }).filter(r=>r.outstanding>0.5).sort((a,b)=>b.outstanding-a.outstanding);
 }
 
+function _getLookbackRows(days){const ref=(DATA&&DATA.exported_at)?DATA.exported_at.slice(0,10):new Date().toISOString().slice(0,10);const cut=new Date(ref);cut.setDate(cut.getDate()-days);return (DATA.stock_out||[]).filter(r=>r.sale_date&&r.sale_date>=cut.toISOString().slice(0,10));}
+function getStockCoverDays(productName,lookbackDays){const lb=lookbackDays||30;const prod=(DATA.products||[]).find(p=>p.product_name===productName);if(!prod)return{error:'Product not found: '+productName};const sold=_getLookbackRows(lb).filter(r=>r.product_name===productName).reduce((s,r)=>s+(+r.quantity||0),0);const rate=sold/lb,stock=+prod.current_stock||0;const cover=rate>0?Math.round(stock/rate):9999;return{product:productName,currentStock:stock,packSize:+prod.pack_size||1,soldLast30:sold,dailyRate:Math.round(rate*10)/10,coverDays:cover>=9999?'no recent sales':cover};}
+function getPurchaseRecommendation(targetDays,lookbackDays){const lb=lookbackDays||30,td=targetDays||10;const sold={};_getLookbackRows(lb).forEach(r=>{sold[r.product_name]=(sold[r.product_name]||0)+(+r.quantity||0);});return (DATA.products||[]).filter(p=>sold[p.product_name]>0).map(p=>{const rate=sold[p.product_name]/lb,stock=+p.current_stock||0,pack=+p.pack_size||1;const cover=Math.round(stock/rate);if(cover>=td)return null;const boxes=Math.ceil((Math.ceil(rate*td)-stock)/pack);return{product:p.product_name,currentStock:stock,dailyRate:Math.round(rate*10)/10,coverDays:cover,boxesToBuy:boxes,estimatedCost:Math.round(boxes*(+p.pack_cost||0))};}).filter(Boolean).sort((a,b)=>a.coverDays-b.coverDays);}
+function getLateCustomers(minDaysLate,minMonths){const minD=minDaysLate||30,minM=minMonths||3;const ss=DATA.sales_summary||[];const ref=(DATA&&DATA.exported_at)?DATA.exported_at.slice(0,10):new Date().toISOString().slice(0,10);const payMap={};ss.filter(r=>String(r.reference_invoice_id||'').startsWith('PAY-')&&r.reference_invoice&&r.sale_date).forEach(r=>{const k=r.reference_invoice;if(!payMap[k]||r.sale_date<payMap[k])payMap[k]=r.sale_date;});const custMonths={};ss.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-')).forEach(r=>{if(!r.sale_date)return;const settle=payMap[r.reference_invoice_id]||ref;const days=Math.round((new Date(settle)-new Date(r.sale_date))/86400000);if(days>minD){const cust=r.customer_name||'',month=r.sale_date.slice(0,7);if(!custMonths[cust])custMonths[cust]=new Set();custMonths[cust].add(month);}});return Object.entries(custMonths).filter(([,s])=>s.size>=minM).map(([c,s])=>({customer:c,monthCount:s.size,months:[...s].sort().join(', ')})).sort((a,b)=>b.monthCount-a.monthCount);}
+
 async function ask(){
   const inp=document.getElementById('ap-input');const q=inp.value.trim();if(!q)return;
   const key=_getKey();
@@ -2235,6 +2240,10 @@ async function ask(){
   loader.textContent='Running query...';
   let {result,error}=sandboxExec(code);
 
+  if(result&&!error){
+    const _fake=(/\b202[0-3]-\d{2}-\d{2}\b/.test(result))||(/\bINV0{1,3}\d{1,3}\b/.test(result))||(/John Smith|Jane Doe|Peter Jones|Alpha Corp|Beta Ltd|Gamma Inc/i.test(result));
+    if(_fake){loader.textContent='The model returned example data instead of your actual data. Please rephrase and try again.';loader.className='am ai err';_history.pop();document.getElementById('ap-send').disabled=false;return;}
+  }
   if(error){
     // Code errored — retry code generation with same model
     try{
