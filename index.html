@@ -449,8 +449,9 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
       <button class="btn btn-outline btn-sm" onclick="showUpload()">📂 Data</button>
       <button class="btn btn-outline btn-sm" onclick="clearCacheAndReload()" title="Fetch latest data from GitHub">🔄 Refresh</button>
     </div>
-    <!-- Always visible on mobile: AI button + dark mode toggle -->
+    <!-- Always visible on mobile: lock, dark mode, AI button -->
     <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+      <button class="btn btn-outline btn-sm" onclick="openSubLockSetup()" title="Lock content on this device" style="font-size:13px;padding:4px 8px;">🔒</button>
       <button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
       <button id="agent-btn" onclick="openAgent()">&#x2728; Ask AI</button>
     </div>
@@ -729,12 +730,14 @@ async function sha256(str){
     .map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
+let _authData=null;
+
 async function loadStoredHash(){
   try{
     const r=await fetch(AUTH_URL+'?_='+Date.now());
     if(!r.ok) return null;
-    const j=await r.json();
-    return j.password_sha256||null;
+    _authData=await r.json();
+    return _authData.password_sha256||null;
   }catch(e){ return null; }
 }
 
@@ -1253,6 +1256,7 @@ function renderKPIs(data){
       <div class="kpi-bar" style="background:${d.color}"></div>
       <div><div class="kpi-icon">${d.icon}</div><div class="kpi-val" style="color:${d.color}">${d.value}</div><div class="kpi-lbl">${d.label}</div></div>
     </div>`).join('');
+  requestAnimationFrame(()=>initSubLock());
 }
 
 // ══════════════════════════════════════════════
@@ -2381,6 +2385,103 @@ function toggleDark(){
     if(btn) btn.textContent='☀️';
   }
 })();
+
+
+// ══════════════════════════════════════════════
+// CONTENT SUB-LOCK
+// ══════════════════════════════════════════════
+const _SL_KEY='gs_sublock_hash';
+const _SL_OVERLAY_IDS=['sl-tab-overview','sl-tab-sales','sl-tab-profitability','sl-purch-vs-sales'];
+let _sl_mode='unlock';
+
+async function _sha256(str){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function _applySubLocks(){
+  const ok=sessionStorage.getItem('gs_subunlocked')==='1';
+  _SL_OVERLAY_IDS.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display=ok?'none':'flex';
+  });
+  document.querySelectorAll('.sl-kpi-overlay').forEach(el=>{
+    el.style.display=ok?'none':'flex';
+  });
+}
+
+function initSubLock(){
+  const kpiRow=document.getElementById('kpi-row');
+  if(kpiRow){
+    const cards=kpiRow.querySelectorAll('.kpi-card');
+    [0,1].forEach(i=>{
+      if(!cards[i]) return;
+      if(!cards[i].querySelector('.sl-kpi-overlay')){
+        cards[i].style.position='relative';
+        cards[i].style.overflow='hidden';
+        const ov=document.createElement('div');
+        ov.className='sublock-overlay sl-kpi-overlay';
+        ov.innerHTML='<div class="sl-icon" style="font-size:20px;">🔒</div>'
+          +'<button class="sl-btn" style="padding:4px 12px;font-size:11px;" onclick="openSubLock()">Unlock</button>';
+        cards[i].appendChild(ov);
+      }
+    });
+  }
+  _applySubLocks();
+}
+
+function openSubLock(){
+  _sl_mode='unlock';
+  const hasHash=!!localStorage.getItem(_SL_KEY);
+  document.getElementById('sl-title').textContent=hasHash?'🔒 Unlock Content':'🔒 Set Content Password';
+  document.getElementById('sl-desc').textContent=hasHash
+    ?'Enter the content password to view locked sections.'
+    :'No password set. Enter a new password to enable content locking.';
+  document.getElementById('sl-setup-note').style.display=hasHash?'none':'block';
+  document.getElementById('sl-error').style.display='none';
+  document.getElementById('sl-pwd').value='';
+  document.getElementById('sl-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('sl-pwd').focus(),80);
+}
+
+function openSubLockSetup(){
+  // Clear remembered unlock on this device — re-locks the content
+  localStorage.removeItem(_SL_LOCAL_KEY);
+  sessionStorage.removeItem('gs_subunlocked');
+  _applySubLocks();
+  const btn=document.querySelector('button[onclick="openSubLockSetup()"]');
+  if(btn){const orig=btn.textContent;btn.textContent='Locked ✓';setTimeout(()=>{btn.textContent=orig;},1800);}
+}
+
+function closeSubLockModal(){
+  document.getElementById('sl-modal').classList.remove('open');
+}
+
+async function confirmSubLock(){
+  const pwd=document.getElementById('sl-pwd').value;
+  if(!pwd) return;
+  const hash=await _sha256(pwd);
+  // Load auth.json if not yet cached
+  if(!_authData){
+    try{const r=await fetch(AUTH_URL+'?_='+Date.now());if(r.ok)_authData=await r.json();}catch(e){}
+  }
+  const contentHash=_authData&&_authData.content_sha256;
+  if(!contentHash){
+    document.getElementById('sl-error').textContent='No content password set in auth.json. Add content_sha256 field.';
+    document.getElementById('sl-error').style.display='block';
+    return;
+  }
+  if(hash===contentHash){
+    localStorage.setItem(_SL_LOCAL_KEY,'1');
+    _applySubLocks();
+    closeSubLockModal();
+  } else {
+    document.getElementById('sl-error').textContent='Incorrect password. Try again.';
+    document.getElementById('sl-error').style.display='block';
+    document.getElementById('sl-pwd').value='';
+    document.getElementById('sl-pwd').focus();
+  }
+}
 
 </script>
 <!-- AI Agent -->
