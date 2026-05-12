@@ -2534,48 +2534,9 @@ async function confirmSubLock(){
   }
 }
 
-</script>
-<!-- Sub-lock Modal -->
-<div id="sl-modal">
-  <div id="sl-modal-box">
-    <h3 id="sl-title">&#x1F512; Unlock Content</h3>
-    <p id="sl-desc">Enter the content password to view locked sections.</p>
-    <div id="sl-err"></div>
-    <input type="password" id="sl-pwd" placeholder="Enter password..."
-      onkeydown="if(event.key==='Enter')confirmSubLock()">
-    <div class="sl-modal-btns">
-      <button id="sl-cancel" onclick="closeSubLockModal()">Cancel</button>
-      <button id="sl-confirm" onclick="confirmSubLock()">Unlock</button>
-    </div>
-  </div>
-</div>
 
-<!-- AI Agent -->
-<div id="agent-overlay" onclick="closeAgent()"></div>
-<div id="agent-panel">
-  <div class="ap-head"><div><h3>&#x2728; GS Business Assistant</h3><small id="ap-model-label">Groq &middot; Llama 3.3 70B</small></div><button class="ap-close" onclick="closeAgent()">&#x2715;</button></div>
-  <div class="ap-setup">
-    <div style="display:flex;gap:6px;margin-bottom:8px;">
-      <div style="flex:1;"><label>Provider</label><select id="ap-provider" onchange="onProviderChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;"><option value="groq">Groq (14,400/day)</option><option value="gemini">Google Gemini</option></select></div>
-      <div style="flex:1;"><label>Model</label><select id="ap-model" onchange="onModelChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;"><option value="llama-3.3-70b-versatile">Llama 3.3 70B &#x2605;</option><option value="llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B</option><option value="llama-3.1-8b-instant">Llama 3.1 8B</option></select></div>
-    </div>
-    <label id="ap-key-label">Groq API Key</label>
-    <div class="ap-key-row" style="margin-top:3px;"><input type="password" id="ap-key" placeholder="gsk_..." autocomplete="off"><button id="ap-save" onclick="saveKey()">Save</button></div>
-    <p class="ap-hint" id="ap-hint">Free at <a href="https://console.groq.com" target="_blank">console.groq.com</a> &middot; No credit card &middot; 14,400 req/day</p>
-  </div>
-  <div class="ap-msgs" id="ap-msgs"><div class="am ai">&#x1F44B; Hi! I write code to query your data directly so I can answer any question &mdash; including filtered ones like &ldquo;best location in April&rdquo;. Add your free API key above to start.</div></div>
-  <div class="ap-chips"><p>Try asking</p><div class="chip-row">
-    <span class="sc" onclick="chip(this)">Highest sale location in April 2026</span>
-    <span class="sc" onclick="chip(this)">Pending invoices for Malvani Days</span>
-    <span class="sc" onclick="chip(this)">Top 5 products by revenue</span>
-    <span class="sc" onclick="chip(this)">Who owes the most money?</span>
-    <span class="sc" onclick="chip(this)">Which products are low on stock?</span>
-    <span class="sc" onclick="chip(this)">Average monthly sale in Sawantwadi</span>
-  </div></div>
-  <div class="ap-bar"><textarea id="ap-input" placeholder="Ask anything about your business..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ask();}"></textarea><button id="ap-send" onclick="ask()">&#x27A4;</button></div>
-</div>
-</body>
-</html>// ════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════
 // CONTENT SUB-LOCK
 // ════════════════════════════════════════════════════════
 const _SL_LOCAL_KEY='gs_content_unlocked';
@@ -2649,3 +2610,46 @@ async function confirmSubLock(){
     document.getElementById('sl-pwd').value='';document.getElementById('sl-pwd').focus();
   }
 }
+
+</script>
+<!-- Sub-lock Modal -->
+<div id="sl-modal">
+  <div id="sl-modal-box">
+    <h3 id="sl-title">&#x1F512; Unlock Content</h3>
+    <p id="sl-desc">Enter the content password to view locked sections.</p>
+    <div id="sl-err"></div>
+    <input type="password" id="sl-pwd" placeholder="Enter password..."
+      onkeydown="if(event.key==='Enter')confirmSubLock()">
+    <div class="sl-modal-btns">
+      <button id="sl-cancel" onclick="closeSubLockModal()">Cancel</button>
+      <button id="sl-confirm" onclick="confirmSubLock()">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI Agent -->
+<div id="agent-overlay" onclick="closeAgent()"></div>
+<div id="agent-panel">
+  <div class="ap-head"><div><h3>&#x2728; GS Business Assistant</h3><small id="ap-model-label">Groq &middot; Llama 3.3 70B</small></div><button class="ap-close" onclick="closeAgent()">&#x2715;</button></div>
+  <div class="ap-setup">
+    <div style="display:flex;gap:6px;margin-bottom:8px;">
+      <div style="flex:1;"><label>Provider</label><select id="ap-provider" onchange="onProviderChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;"><option value="groq">Groq (14,400/day)</option><option value="gemini">Google Gemini</option></select></div>
+      <div style="flex:1;"><label>Model</label><select id="ap-model" onchange="onModelChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;"><option value="llama-3.3-70b-versatile">Llama 3.3 70B &#x2605;</option><option value="llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B</option><option value="llama-3.1-8b-instant">Llama 3.1 8B</option></select></div>
+    </div>
+    <label id="ap-key-label">Groq API Key</label>
+    <div class="ap-key-row" style="margin-top:3px;"><input type="password" id="ap-key" placeholder="gsk_..." autocomplete="off"><button id="ap-save" onclick="saveKey()">Save</button></div>
+    <p class="ap-hint" id="ap-hint">Free at <a href="https://console.groq.com" target="_blank">console.groq.com</a> &middot; No credit card &middot; 14,400 req/day</p>
+  </div>
+  <div class="ap-msgs" id="ap-msgs"><div class="am ai">&#x1F44B; Hi! I write code to query your data directly so I can answer any question &mdash; including filtered ones like &ldquo;best location in April&rdquo;. Add your free API key above to start.</div></div>
+  <div class="ap-chips"><p>Try asking</p><div class="chip-row">
+    <span class="sc" onclick="chip(this)">Highest sale location in April 2026</span>
+    <span class="sc" onclick="chip(this)">Pending invoices for Malvani Days</span>
+    <span class="sc" onclick="chip(this)">Top 5 products by revenue</span>
+    <span class="sc" onclick="chip(this)">Who owes the most money?</span>
+    <span class="sc" onclick="chip(this)">Which products are low on stock?</span>
+    <span class="sc" onclick="chip(this)">Average monthly sale in Sawantwadi</span>
+  </div></div>
+  <div class="ap-bar"><textarea id="ap-input" placeholder="Ask anything about your business..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ask();}"></textarea><button id="ap-send" onclick="ask()">&#x27A4;</button></div>
+</div>
+</body>
+</html>
