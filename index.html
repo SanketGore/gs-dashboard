@@ -352,6 +352,37 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .inv-table tfoot td{padding:9px 12px;}
 .inv-table tfoot td:first-child{text-align:left;}
 .inv-profit{color:var(--green);font-weight:600;}
+
+/* ── Content Sub-lock ──────────────────────────────────────────── */
+.sublock-wrap{position:relative;overflow:hidden;}
+.sublock-overlay{position:absolute;inset:0;z-index:50;background:var(--card);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;border-radius:var(--card-r);}
+.sublock-overlay .sl-icon{font-size:28px;}
+.sublock-overlay .sl-msg{font-size:12px;color:var(--text);font-weight:600;text-align:center;padding:0 16px;}
+.sublock-overlay .sl-btn{padding:7px 20px;font-size:12px;font-weight:700;
+  background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;
+  border:none;border-radius:6px;cursor:pointer;}
+.sublock-overlay .sl-btn:hover{opacity:.88;}
+#sl-modal{display:none;position:fixed;inset:0;z-index:1000;
+  background:rgba(0,0,0,.55);backdrop-filter:blur(4px);
+  align-items:center;justify-content:center;}
+#sl-modal.open{display:flex;}
+#sl-modal-box{background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:28px 28px 20px;width:320px;max-width:92vw;
+  box-shadow:0 8px 32px rgba(0,0,0,.3);}
+#sl-modal-box h3{font-size:15px;font-weight:700;color:var(--accent);margin:0 0 6px;}
+#sl-modal-box p{font-size:12px;color:var(--dim);margin:0 0 14px;}
+#sl-pwd{width:100%;padding:9px 12px;font-size:14px;font-family:inherit;
+  border:1px solid var(--border);border-radius:6px;background:var(--bg);
+  color:var(--text);box-sizing:border-box;margin-bottom:8px;}
+#sl-pwd:focus{outline:none;border-color:#667eea;}
+.sl-modal-btns{display:flex;gap:8px;justify-content:flex-end;}
+.sl-modal-btns button{padding:7px 18px;font-size:13px;font-weight:600;
+  border-radius:5px;cursor:pointer;border:1px solid transparent;}
+#sl-cancel{background:var(--bg);color:var(--dim);border-color:var(--border)!important;}
+#sl-confirm{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;}
+#sl-err{font-size:11px;color:var(--red);margin-bottom:6px;display:none;}
 </style>
 </head>
 <body>
@@ -478,7 +509,8 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
   </div>
 
   <!-- ── TAB: Overview ───────────────────────────────── -->
-  <div id="tab-overview" class="tab-content active">
+  <div id="tab-overview" class="tab-content sublock-wrap active">
+    <div class="sublock-overlay" id="sl-tab-overview"><div class="sl-icon">&#x1F512;</div><div class="sl-msg">This section is locked</div><button class="sl-btn" onclick="openSubLock()">Unlock</button></div>
     <div class="content">
       <div class="chart-grid g-1 fade-in">
         <div class="chart-card">
@@ -503,7 +535,8 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
   </div>
 
   <!-- ── TAB: Sales ──────────────────────────────────── -->
-  <div id="tab-sales" class="tab-content">
+  <div id="tab-sales" class="tab-content sublock-wrap">
+    <div class="sublock-overlay" id="sl-tab-sales"><div class="sl-icon">&#x1F512;</div><div class="sl-msg">This section is locked</div><button class="sl-btn" onclick="openSubLock()">Unlock</button></div>
     <div class="content">
       <div class="chart-grid g-2 fade-in">
         <div class="chart-card">
@@ -529,7 +562,8 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
   </div>
 
   <!-- ── TAB: Profitability ──────────────────────────── -->
-  <div id="tab-profitability" class="tab-content">
+  <div id="tab-profitability" class="tab-content sublock-wrap">
+    <div class="sublock-overlay" id="sl-tab-profitability"><div class="sl-icon">&#x1F512;</div><div class="sl-msg">This section is locked</div><button class="sl-btn" onclick="openSubLock()">Unlock</button></div>
     <div class="content">
       <div class="chart-grid g-1 fade-in">
         <div class="chart-card">
@@ -687,7 +721,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
         </div>
         <div class="chart-card">
           <div class="chart-title">🛒 Purchase Cost vs Sales Revenue</div>
-          <div class="chart-canvas-wrap" style="height:340px;"><canvas id="chart-purch-vs-sales"></canvas></div>
+          <div class="chart-canvas-wrap sublock-wrap" style="height:340px;"><canvas id="chart-purch-vs-sales"></canvas><div class="sublock-overlay" id="sl-purch-vs-sales"><div class="sl-icon">&#x1F512;</div><div class="sl-msg">Locked</div><button class="sl-btn" onclick="openSubLock()">Unlock</button></div></div>
         </div>
       </div>
       <!-- Row 2: Seasonal Demand Index -->
@@ -737,7 +771,20 @@ async function loadStoredHash(){
     const r=await fetch(AUTH_URL+'?_='+Date.now());
     if(!r.ok) return null;
     _authData=await r.json();
-    return _authData.password_sha256||null;
+    const pwH=_authData.password_sha256||'';
+    const ctH=_authData.content_sha256||'';
+    const newPwFP=pwH.slice(0,12), newCtFP=ctH.slice(0,12);
+    const oldPwFP=localStorage.getItem('gs_pw_fp');
+    const oldCtFP=localStorage.getItem('gs_ct_fp');
+    if(oldPwFP&&oldPwFP!==newPwFP){ forgetDevice(); localStorage.removeItem('gs_pw_fp'); }
+    if(oldCtFP&&oldCtFP!==newCtFP){
+      localStorage.removeItem('gs_content_unlocked');
+      sessionStorage.removeItem('gs_subunlocked');
+      localStorage.removeItem('gs_ct_fp');
+    }
+    if(newPwFP) localStorage.setItem('gs_pw_fp',newPwFP);
+    if(newCtFP) localStorage.setItem('gs_ct_fp',newCtFP);
+    return pwH||null;
   }catch(e){ return null; }
 }
 
@@ -828,12 +875,16 @@ function clearCacheAndReload(){
 }
 
 // Entry point — runs on every page load
-window.addEventListener('DOMContentLoaded', ()=>{
+window.addEventListener('DOMContentLoaded', async ()=>{
   if(isRemembered()){
-    // Remembered device — skip login, go straight to data
-    startApp();
+    // Always fetch auth.json to check if password changed since last visit
+    await loadStoredHash();
+    if(isRemembered()){ startApp(); }
+    else{
+      document.getElementById('login-screen').style.display='flex';
+      setTimeout(()=>document.getElementById('login-pwd').focus(),100);
+    }
   }else{
-    // Show login screen
     document.getElementById('login-screen').style.display='flex';
     setTimeout(()=>document.getElementById('login-pwd').focus(),100);
   }
@@ -2484,6 +2535,21 @@ async function confirmSubLock(){
 }
 
 </script>
+<!-- Sub-lock Modal -->
+<div id="sl-modal">
+  <div id="sl-modal-box">
+    <h3 id="sl-title">&#x1F512; Unlock Content</h3>
+    <p id="sl-desc">Enter the content password to view locked sections.</p>
+    <div id="sl-err"></div>
+    <input type="password" id="sl-pwd" placeholder="Enter password..."
+      onkeydown="if(event.key==='Enter')confirmSubLock()">
+    <div class="sl-modal-btns">
+      <button id="sl-cancel" onclick="closeSubLockModal()">Cancel</button>
+      <button id="sl-confirm" onclick="confirmSubLock()">Unlock</button>
+    </div>
+  </div>
+</div>
+
 <!-- AI Agent -->
 <div id="agent-overlay" onclick="closeAgent()"></div>
 <div id="agent-panel">
@@ -2509,4 +2575,77 @@ async function confirmSubLock(){
   <div class="ap-bar"><textarea id="ap-input" placeholder="Ask anything about your business..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ask();}"></textarea><button id="ap-send" onclick="ask()">&#x27A4;</button></div>
 </div>
 </body>
-</html>
+</html>// ════════════════════════════════════════════════════════
+// CONTENT SUB-LOCK
+// ════════════════════════════════════════════════════════
+const _SL_LOCAL_KEY='gs_content_unlocked';
+const _SL_ITEMS=['sl-tab-overview','sl-tab-sales','sl-tab-profitability','sl-purch-vs-sales'];
+
+async function _sha256(s){
+  const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+
+function _applySubLocks(){
+  const ok=localStorage.getItem(_SL_LOCAL_KEY)==='1'||sessionStorage.getItem('gs_subunlocked')==='1';
+  _SL_ITEMS.forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=ok?'none':'flex';});
+  document.querySelectorAll('.sl-kpi-overlay').forEach(el=>{el.style.display=ok?'none':'flex';});
+}
+
+function initSubLock(){
+  const row=document.getElementById('kpi-row');
+  if(row){
+    row.querySelectorAll('.kpi-card').forEach((c,i)=>{
+      if(i>1||c.querySelector('.sl-kpi-overlay')) return;
+      c.style.position='relative';c.style.overflow='hidden';
+      const ov=document.createElement('div');
+      ov.className='sublock-overlay sl-kpi-overlay';
+      ov.innerHTML='<div class="sl-icon">&#x1F512;</div>'
+        +'<button class="sl-btn" style="padding:4px 12px;font-size:11px;" onclick="openSubLock()">Unlock</button>';
+      c.appendChild(ov);
+    });
+  }
+  _applySubLocks();
+}
+
+function openSubLock(){
+  const e=document.getElementById('sl-err');if(e){e.style.display='none';e.textContent='';}
+  document.getElementById('sl-pwd').value='';
+  document.getElementById('sl-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('sl-pwd').focus(),80);
+}
+
+function closeSubLockModal(){document.getElementById('sl-modal').classList.remove('open');}
+
+function openSubLockSetup(){
+  localStorage.removeItem(_SL_LOCAL_KEY);
+  localStorage.removeItem('gs_ct_fp');
+  sessionStorage.removeItem('gs_subunlocked');
+  _applySubLocks();
+  document.querySelectorAll('[onclick="openSubLockSetup()"]').forEach(b=>{
+    const t=b.textContent;b.textContent='Locked';setTimeout(()=>{b.textContent=t;},1800);
+  });
+}
+
+async function confirmSubLock(){
+  const pwd=document.getElementById('sl-pwd').value;if(!pwd)return;
+  const hash=await _sha256(pwd);
+  if(!_authData){
+    try{const r=await fetch(AUTH_URL+'?_='+Date.now());if(r.ok)_authData=await r.json();}catch(e){}
+  }
+  const ctH=_authData&&_authData.content_sha256;
+  const err=document.getElementById('sl-err');
+  if(!ctH){
+    err.textContent='No content password set in auth.json (add content_sha256).';
+    err.style.display='block';return;
+  }
+  if(hash===ctH){
+    localStorage.setItem(_SL_LOCAL_KEY,'1');
+    sessionStorage.setItem('gs_subunlocked','1');
+    localStorage.setItem('gs_ct_fp',ctH.slice(0,12));
+    _applySubLocks();closeSubLockModal();
+  } else {
+    err.textContent='Incorrect password. Try again.';err.style.display='block';
+    document.getElementById('sl-pwd').value='';document.getElementById('sl-pwd').focus();
+  }
+}
