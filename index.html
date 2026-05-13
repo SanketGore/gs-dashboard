@@ -877,19 +877,24 @@ function clearCacheAndReload(){
 
 // Entry point — runs on every page load
 window.addEventListener('DOMContentLoaded', async ()=>{
-  // Always hide the upload screen — it's only shown after successful auth + data load
+  // Hide upload screen — shown only after auth + data load
   document.getElementById('upload-screen').style.display='none';
-  if(isRemembered()){
-    // Always fetch auth.json to check if password changed since last visit
-    await loadStoredHash();
-    if(isRemembered()){ startApp(); }
-    else{
-      document.getElementById('login-screen').style.display='flex';
-      setTimeout(()=>document.getElementById('login-pwd').focus(),100);
-    }
-  }else{
+  // Safety wrapper — if anything throws, always show login screen
+  const _showLogin=()=>{
     document.getElementById('login-screen').style.display='flex';
-    setTimeout(()=>document.getElementById('login-pwd').focus(),100);
+    setTimeout(()=>document.getElementById('login-pwd')?.focus(),100);
+  };
+  try{
+    if(isRemembered()){
+      try{ await loadStoredHash(); }catch(e){ console.warn('auth check failed',e); }
+      if(isRemembered()){ startApp(); }
+      else{ _showLogin(); }
+    }else{
+      _showLogin();
+    }
+  }catch(e){
+    console.error('Init error:',e);
+    _showLogin();
   }
 });
 
