@@ -2260,16 +2260,18 @@ async function ask(){
     return _PROVIDERS.groq.call(msgs,_groqKey,'llama-3.3-70b-versatile',maxTok);
   }
 
-  // ── Supabase knowledge retrieval ────────────────────────────────────
+  // ── Supabase knowledge retrieval (3s timeout — never blocks Groq) ───
   let _knowledgeExamples='';
   if(_sbReady()){
     try{
-      const _kp=await retrieveKnowledge(q);
+      const _timeout=new Promise(r=>setTimeout(r,3000));
+      const _kpResult=await Promise.race([retrieveKnowledge(q),_timeout]);
+      const _kp=Array.isArray(_kpResult)?_kpResult:[];
       if(_kp.length){
         _knowledgeExamples='\n\nRELEVANT PAST EXAMPLES from your actual data:\n'
           +_kp.map(p=>'Q: '+p.question+'\n<execute_js>\n'+p.working_code+'\n</execute_js>').join('\n\n');
       }
-    }catch(e){/* non-blocking */}
+    }catch(e){/* non-blocking — Supabase failure never breaks the bot */}
   }
 
   // ── STEP 1: Code generation — Groq primary, Gemini Flash fallback ────
