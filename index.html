@@ -57,7 +57,7 @@ body{transition:background .2s,color .2s;}
 body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
 
 /* ── Upload screen ── */
-#upload-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;text-align:center;}
+#upload-screen{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;text-align:center;}
 #upload-screen h1{font-size:clamp(1.6rem,4vw,2.4rem);color:var(--accent);margin-bottom:8px;}
 #upload-screen p{color:var(--dim);max-width:480px;margin-bottom:24px;font-size:14px;line-height:1.5;}
 .upload-zone{border:2px dashed var(--blue);border-radius:16px;padding:48px 40px;cursor:pointer;transition:all .2s;background:rgba(41,128,185,0.04);max-width:500px;width:100%;}
@@ -414,6 +414,10 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 
 <!-- UPLOAD SCREEN -->
 <div id="upload-screen">
+  <button onclick="closeUpload()" id="upload-close-btn"
+    style="position:absolute;top:16px;right:20px;background:none;border:none;
+    font-size:22px;cursor:pointer;color:var(--dim);line-height:1;padding:4px 8px;"
+    title="Back to dashboard">&#x2715;</button>
   <h1>🏠 GS Agencies Dashboard</h1>
   <p>The dashboard loads automatically when data has been pushed from the desktop app. If no data is found, upload <strong>dashboard_data.json</strong> manually below.</p>
   <div class="upload-zone" onclick="document.getElementById('file-input').click()">
@@ -1008,6 +1012,17 @@ function loadCached(){
 function showUpload(){
   document.getElementById('dashboard').style.display='none';
   document.getElementById('upload-screen').style.display='flex';
+  _updateUploadCloseBtn();
+}
+function closeUpload(){
+  if(!DATA) return; // no dashboard to go back to
+  document.getElementById('upload-screen').style.display='none';
+  document.getElementById('dashboard').style.display='block';
+}
+// Show/hide the close button depending on whether dashboard is loaded
+function _updateUploadCloseBtn(){
+  const btn=document.getElementById('upload-close-btn');
+  if(btn) btn.style.display=DATA?'block':'none';
 }
 
 // DOMContentLoaded is now handled by the auth module above
@@ -2264,7 +2279,7 @@ async function ask(){
   let _knowledgeExamples='';
   if(_sbReady()){
     try{
-      const _timeout=new Promise(r=>setTimeout(r,3000));
+      const _timeout=new Promise(r=>setTimeout(r,2000));
       const _kpResult=await Promise.race([retrieveKnowledge(q),_timeout]);
       const _kp=Array.isArray(_kpResult)?_kpResult:[];
       if(_kp.length){
@@ -2668,10 +2683,13 @@ function _updateSbStatus(){
 async function _sbInsert(table,row){
   if(!_sbReady())return null;
   try{
+    const ctrl=new AbortController();
+    const tid=setTimeout(()=>ctrl.abort(),4000);
     const r=await fetch(_SB_URL+'/rest/v1/'+table,{method:'POST',
       headers:{'apikey':_SB_KEY,'Authorization':'Bearer '+_SB_KEY,
         'Content-Type':'application/json','Prefer':'return=representation'},
-      body:JSON.stringify(row)});
+      body:JSON.stringify(row),signal:ctrl.signal});
+    clearTimeout(tid);
     if(!r.ok)return null;
     const d=await r.json();return Array.isArray(d)?d[0]:d;
   }catch(e){return null;}
@@ -2679,8 +2697,12 @@ async function _sbInsert(table,row){
 async function _sbSelect(table,params){
   if(!_sbReady())return[];
   try{
+    const ctrl=new AbortController();
+    const tid=setTimeout(()=>ctrl.abort(),4000);
     const r=await fetch(_SB_URL+'/rest/v1/'+table+'?'+(params||''),{
-      headers:{'apikey':_SB_KEY,'Authorization':'Bearer '+_SB_KEY}});
+      headers:{'apikey':_SB_KEY,'Authorization':'Bearer '+_SB_KEY},
+      signal:ctrl.signal});
+    clearTimeout(tid);
     if(!r.ok)return[];return await r.json();
   }catch(e){return[];}
 }
