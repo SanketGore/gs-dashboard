@@ -2275,18 +2275,13 @@ async function ask(){
     return _PROVIDERS.groq.call(msgs,_groqKey,'llama-3.3-70b-versatile',maxTok);
   }
 
-  // ── Supabase knowledge retrieval (3s timeout — never blocks Groq) ───
+ // ── Knowledge retrieval from in-memory cache (sync, zero latency) ───
   let _knowledgeExamples='';
-  if(_sbReady()){
-    try{
-      const _timeout=new Promise(r=>setTimeout(r,2000));
-      const _kpResult=await Promise.race([retrieveKnowledge(q),_timeout]);
-      const _kp=Array.isArray(_kpResult)?_kpResult:[];
-      if(_kp.length){
-        _knowledgeExamples='\n\nRELEVANT PAST EXAMPLES from your actual data:\n'
-          +_kp.map(p=>'Q: '+p.question+'\n<execute_js>\n'+p.working_code+'\n</execute_js>').join('\n\n');
-      }
-    }catch(e){/* non-blocking — Supabase failure never breaks the bot */}
+  const _kp=_matchKnowledge(q);
+  if(_kp.length){
+    _knowledgeExamples='\n\nRELEVANT PAST EXAMPLES from your actual data:\n'
+      +_kp.map(p=>'Q: '+p.question+'\n<execute_js>\n'+p.working_code+'\n</execute_js>').join('\n\n');
+    _kp.forEach(p=>_sbUpdate('knowledge_patterns',p.id,{use_count:(p.use_count||0)+1}).catch(()=>{}));
   }
 
   // ── STEP 1: Code generation — Groq primary, Gemini Flash fallback ────
@@ -2665,6 +2660,7 @@ function saveSupabaseCreds(){
   if(u){localStorage.setItem('gs_sb_url',u);_SB_URL=u;}
   if(k){localStorage.setItem('gs_sb_key',k);_SB_KEY=k;}
   _updateSbStatus();
+  if(_sbReady()){_sbCacheLoaded=false;setTimeout(()=>_preloadKnowledge().catch(()=>{}),200);}
 }
 function loadSupabaseCreds(){
   _SB_URL=localStorage.getItem('gs_sb_url')||'';
