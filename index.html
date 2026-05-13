@@ -877,6 +877,8 @@ function clearCacheAndReload(){
 
 // Entry point — runs on every page load
 window.addEventListener('DOMContentLoaded', async ()=>{
+  // Always hide the upload screen — it's only shown after successful auth + data load
+  document.getElementById('upload-screen').style.display='none';
   if(isRemembered()){
     // Always fetch auth.json to check if password changed since last visit
     await loadStoredHash();
