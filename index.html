@@ -847,6 +847,7 @@ function showDashboardAfterLogin(){
 const GITHUB_RAW = 'https://raw.githubusercontent.com/sanketgore/gs-dashboard/main/dashboard_data.json';
 
 async function startApp(){
+  initSupabase();
   // Try raw.githubusercontent.com first — bypasses GitHub Pages CDN cache.
   // Pages CDN can serve stale files for up to 10 min; raw.githubusercontent.com
   // always returns the latest committed content immediately.
