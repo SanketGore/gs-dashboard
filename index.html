@@ -2742,7 +2742,11 @@ async function _sbInsert(table,row){
         'Content-Type':'application/json','Prefer':'return=representation'},
       body:JSON.stringify(row),signal:ctrl.signal});
     clearTimeout(tid);
-    if(!r.ok)return null;
+    if(!r.ok){
+      const e=await r.json().catch(()=>({}));
+      console.warn('[Supabase] INSERT failed:',r.status,JSON.stringify(e).slice(0,120));
+      return null;
+    }
     const d=await r.json();return Array.isArray(d)?d[0]:d;
   }catch(e){return null;}
 }
@@ -2823,7 +2827,8 @@ function _matchKnowledge(question){
 async function retrieveKnowledge(question){return _matchKnowledge(question);}
 
 async function logQuery({question,code,result,success,model,provenanceValid}){
-  if(!_sbReady())return null;
+  if(!_sbReady()){console.log('[Supabase] logQuery skipped — not connected');return null;}
+  console.log('[Supabase] logQuery firing — success:'+success+' q:'+question.slice(0,40));
   return await _sbInsert('query_log',{
     question,generated_code:code||null,raw_result:(result||'').slice(0,2000),
     success:!!success,provenance_valid:!!provenanceValid,
@@ -2868,9 +2873,10 @@ async function isAlertPersistent(type,product,customer,days){
 }
 async function getCurationQueue(limit){
   if(!_sbReady())return[];
+  // Show ALL successful unpromoted queries — human review is the final filter
   return await _sbSelect('query_log',
-    'success=eq.true&provenance_valid=eq.true&promoted=eq.false'
-    +'&order=created_at.desc&limit='+(limit||20));
+    'success=eq.true&promoted=eq.false'
+    +'&order=created_at.desc&limit='+(limit||30));
 }
 function initSupabase(){
   loadSupabaseCreds();
@@ -2887,11 +2893,26 @@ async function loadCurationQueue(){
   const nocon=document.getElementById('curation-not-connected');
   const count=document.getElementById('curation-count');
   if(!list) return;
-  if(!_sbReady()){if(nocon)nocon.style.display='block';if(empty)empty.style.display='none';list.innerHTML='';return;}
+  if(!_sbReady()){
+    if(nocon)nocon.style.display='block';
+    if(empty)empty.style.display='none';
+    list.innerHTML=''; return;
+  }
   if(nocon)nocon.style.display='none';
   list.innerHTML='<p style="color:var(--dim);font-size:12px;">Loading...</p>';
-  const rows=await getCurationQueue(30);
-  if(!rows||!rows.length){list.innerHTML='';if(empty)empty.style.display='block';if(count)count.textContent='0 pending';loadKnowledgeBase();return;}
+  let rows=[];
+  try{ rows=await getCurationQueue(30)||[]; }
+  catch(e){
+    list.innerHTML='<p style="color:var(--red);font-size:12px;">Error loading queue: '+e.message+'</p>';
+    return;
+  }
+  console.log('[Curation] Fetched',rows.length,'rows from query_log');
+  if(!rows.length){
+    list.innerHTML='';
+    if(empty)empty.style.display='block';
+    if(count)count.textContent='0 pending';
+    loadKnowledgeBase(); return;
+  }
   if(empty)empty.style.display='none';
   if(count)count.textContent=rows.length+' pending';
   list.innerHTML=rows.map(r=>`
@@ -2900,7 +2921,7 @@ async function loadCurationQueue(){
       <div class="cur-meta">
         <span>\uD83D\uDCC5 ${(r.created_at||'').slice(0,16).replace('T',' ')}</span>
         <span>\uD83E\uDD16 ${r.model_used||'unknown'}</span>
-        <span>${r.provenance_valid?'\u2705 Provenance OK':'\u26A0\uFE0F Provenance unverified'}</span>
+        <span>${r.provenance_valid?'\u2705 Provenance OK':'\u26A0\uFE0F Needs manual check'}</span>
       </div>
       <div class="cur-code">${escHtml((r.generated_code||'(no code)').slice(0,600))}</div>
       <div style="font-size:11px;color:var(--dim);margin-bottom:8px;max-height:60px;overflow:hidden;">
