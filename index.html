@@ -2387,7 +2387,17 @@ async function ask(){
   let _queryLogId=null;
   if(result&&!error){
     const _fake=(/\b202[0-3]-\d{2}-\d{2}\b/.test(result))||(/\bINV0{1,3}\d{1,3}\b/.test(result))||(/John Smith|Jane Doe|Peter Jones|Alpha Corp|Beta Ltd|Gamma Inc/i.test(result));
-    if(_fake){loader.textContent='The model returned example data instead of your actual data. Please rephrase and try again.';loader.className='am ai err';_history.pop();document.getElementById('ap-send').disabled=false;return;}
+    if(_fake){
+      logQuery({question:q,code,result,success:false,model:'groq',provenanceValid:false}).catch(()=>{});
+      loader.textContent='The model returned example data instead of your actual data. Please rephrase and try again.';
+      loader.className='am ai err';
+      _history.pop();document.getElementById('ap-send').disabled=false;return;
+    }
+    // Provenance check + log to Supabase (non-blocking)
+    const _prov=_validateProvenance(result);
+    if(!_prov.valid) console.warn('[Supabase] Provenance warnings:',_prov.warnings);
+    logQuery({question:q,code,result,success:true,model:'groq',provenanceValid:_prov.valid})
+      .then(row=>{if(row&&row.id){_queryLogId=row.id;console.log('[Supabase] Logged query id:',row.id);}}).catch(e=>console.warn('[Supabase] logQuery error:',e.message));
   }
   if(error){
     // Code errored — retry code generation with same model
