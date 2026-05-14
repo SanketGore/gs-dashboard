@@ -383,6 +383,28 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 #sl-cancel{background:var(--bg);color:var(--dim);border-color:var(--border)!important;}
 #sl-confirm{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;}
 #sl-err{font-size:11px;color:var(--red);margin-bottom:6px;display:none;}
+
+/* ── Curation Review UI ───────────────────────────────── */
+.cur-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px 16px;}
+.cur-card:hover{border-color:var(--blue);}
+.cur-q{font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;}
+.cur-meta{font-size:10px;color:var(--dim);margin-bottom:8px;display:flex;gap:12px;flex-wrap:wrap;}
+.cur-code{font-family:monospace;font-size:11px;background:var(--card);border:1px solid var(--border);
+  border-radius:5px;padding:8px 10px;white-space:pre-wrap;word-break:break-all;
+  max-height:120px;overflow-y:auto;color:var(--text);margin-bottom:8px;}
+.cur-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.cur-btn-promote{padding:5px 14px;font-size:12px;font-weight:700;background:var(--green);
+  color:#fff;border:none;border-radius:5px;cursor:pointer;}
+.cur-btn-promote:hover{opacity:.85;}
+.cur-btn-dismiss{padding:5px 12px;font-size:12px;color:var(--dim);
+  background:var(--bg);border:1px solid var(--border);border-radius:5px;cursor:pointer;}
+.kb-card{background:var(--bg);border:1px solid var(--border);
+  border-radius:8px;padding:12px 14px;display:flex;gap:12px;align-items:flex-start;}
+.kb-card-body{flex:1;min-width:0;}
+.kb-q{font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.kb-meta{font-size:10px;color:var(--dim);}
+.kb-btn-delete{padding:3px 10px;font-size:11px;color:var(--red);
+  background:none;border:1px solid var(--red);border-radius:4px;cursor:pointer;white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -521,6 +543,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
     <div class="tab" onclick="switchTab('receivables',this)">💳 Receivables</div>
     <div class="tab" onclick="switchTab('forecast',this)">🔮 Forecast</div>
     <div class="tab" onclick="switchTab('insights',this)">💡 Insights</div>
+    <div class="tab" onclick="switchTab('curation',this)">🔬 Review</div>
   </div>
 
   <!-- ── TAB: Overview ───────────────────────────────── -->
@@ -749,6 +772,32 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
           <div class="chart-canvas-wrap" style="height:260px;"><canvas id="chart-seasonal"></canvas></div>
           <p class="forecast-note" style="margin-top:8px;">Index = monthly sales ÷ monthly average. Values above 1.0 indicate above-average demand for that month. Helps plan purchase timing.</p>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-curation" class="tab-content">
+    <div class="content">
+      <div class="chart-card fade-in">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div class="chart-title" style="margin:0;">🔬 Query Review Queue</div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="loadCurationQueue()" class="btn btn-outline btn-sm">&#x1F504; Refresh</button>
+            <span id="curation-count" style="font-size:11px;color:var(--dim);align-self:center;"></span>
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--dim);margin-bottom:14px;">Successful, provenance-verified queries waiting for review. Promote correct ones to build the AI knowledge base.</p>
+        <div id="curation-not-connected" style="display:none;padding:20px;text-align:center;color:var(--dim);font-size:13px;">&#x26A0;&#xFE0F; Supabase not connected. Enter credentials in the &#x1F4C2; Data panel.</div>
+        <div id="curation-empty" style="display:none;padding:20px;text-align:center;color:var(--dim);font-size:13px;">&#x2705; No queries awaiting review. Ask the bot some questions first!</div>
+        <div id="curation-list" style="display:flex;flex-direction:column;gap:12px;"></div>
+      </div>
+      <div class="chart-card fade-in" style="margin-top:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div class="chart-title" style="margin:0;">&#x1F4DA; Knowledge Base</div>
+          <span id="kb-count" style="font-size:11px;color:var(--dim);"></span>
+        </div>
+        <p style="font-size:12px;color:var(--dim);margin-bottom:14px;">Promoted patterns used as examples in future bot queries.</p>
+        <div id="kb-list" style="display:flex;flex-direction:column;gap:10px;"></div>
       </div>
     </div>
   </div>
@@ -1321,6 +1370,8 @@ function renderTab(id){
     safeRender(()=>renderStockCover(f),'stock-cover');
     safeRender(()=>renderPurchVsSales(f),'purch-vs-sales');
     safeRender(()=>populateSeasonalDropdown(),'seasonal-dropdown');
+  } else if(id==='curation'){
+    loadCurationQueue();
   }
 }
 
@@ -2824,6 +2875,93 @@ async function getCurationQueue(limit){
 function initSupabase(){
   loadSupabaseCreds();
   setTimeout(()=>_preloadKnowledge().catch(()=>{}),500);
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// CURATION REVIEW UI
+// ════════════════════════════════════════════════════════════════
+async function loadCurationQueue(){
+  const list=document.getElementById('curation-list');
+  const empty=document.getElementById('curation-empty');
+  const nocon=document.getElementById('curation-not-connected');
+  const count=document.getElementById('curation-count');
+  if(!list) return;
+  if(!_sbReady()){if(nocon)nocon.style.display='block';if(empty)empty.style.display='none';list.innerHTML='';return;}
+  if(nocon)nocon.style.display='none';
+  list.innerHTML='<p style="color:var(--dim);font-size:12px;">Loading...</p>';
+  const rows=await getCurationQueue(30);
+  if(!rows||!rows.length){list.innerHTML='';if(empty)empty.style.display='block';if(count)count.textContent='0 pending';loadKnowledgeBase();return;}
+  if(empty)empty.style.display='none';
+  if(count)count.textContent=rows.length+' pending';
+  list.innerHTML=rows.map(r=>`
+    <div class="cur-card" id="cur-${r.id}">
+      <div class="cur-q">${escHtml(r.question||'')}</div>
+      <div class="cur-meta">
+        <span>\uD83D\uDCC5 ${(r.created_at||'').slice(0,16).replace('T',' ')}</span>
+        <span>\uD83E\uDD16 ${r.model_used||'unknown'}</span>
+        <span>${r.provenance_valid?'\u2705 Provenance OK':'\u26A0\uFE0F Provenance unverified'}</span>
+      </div>
+      <div class="cur-code">${escHtml((r.generated_code||'(no code)').slice(0,600))}</div>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:8px;max-height:60px;overflow:hidden;">
+        Result preview: ${escHtml((r.raw_result||'').slice(0,200))}
+      </div>
+      <div class="cur-actions">
+        <button class="cur-btn-promote" onclick="promoteCuration('${r.id}','${escAttr(r.question)}','${escAttr(r.generated_code)}','${escAttr((r.raw_result||'').slice(0,200))}')">\u2705 Promote to Knowledge Base</button>
+        <button class="cur-btn-dismiss" onclick="dismissCuration('${r.id}')">\uD83D\uDDD1\uFE0F Dismiss</button>
+      </div>
+    </div>`).join('');
+  loadKnowledgeBase();
+}
+async function promoteCuration(id,question,code,resultSummary){
+  const card=document.getElementById('cur-'+id);
+  if(card){card.style.opacity='0.5';const b=card.querySelector('.cur-btn-promote');if(b){b.textContent='Promoting\u2026';b.disabled=true;}}
+  const ok=await promoteToKnowledge(id,question,code,resultSummary);
+  if(ok){
+    if(card)card.remove();
+    _sbCacheLoaded=false;_preloadKnowledge().catch(()=>{});
+    loadKnowledgeBase();showToast('\u2705 Promoted to knowledge base');
+  } else {
+    if(card){card.style.opacity='1';const b=card.querySelector('.cur-btn-promote');if(b){b.textContent='\u2705 Promote';b.disabled=false;}}
+    showToast('\u274C Promotion failed');
+  }
+}
+async function dismissCuration(id){
+  await _sbUpdate('query_log',id,{promoted:true,promoted_at:new Date().toISOString()});
+  const card=document.getElementById('cur-'+id);if(card)card.remove();
+  showToast('\uD83D\uDDD1\uFE0F Dismissed');
+}
+async function loadKnowledgeBase(){
+  const list=document.getElementById('kb-list');
+  const count=document.getElementById('kb-count');
+  if(!list||!_sbReady())return;
+  const rows=await _sbSelect('knowledge_patterns','order=use_count.desc&limit=50');
+  if(!rows||!rows.length){list.innerHTML='<p style="color:var(--dim);font-size:12px;">No patterns yet.</p>';if(count)count.textContent='0 patterns';return;}
+  if(count)count.textContent=rows.length+' patterns';
+  list.innerHTML=rows.map(r=>`
+    <div class="kb-card" id="kb-${r.id}">
+      <div class="kb-card-body">
+        <div class="kb-q">${escHtml(r.question||'')}</div>
+        <div class="kb-meta">Used ${r.use_count||0}\xd7 &middot; Added ${(r.created_at||'').slice(0,10)} &middot; Keywords: ${(r.keywords||[]).join(', ')}</div>
+      </div>
+      <button class="kb-btn-delete" onclick="deleteKbPattern('${r.id}')">Delete</button>
+    </div>`).join('');
+}
+async function deleteKbPattern(id){
+  if(!confirm('Remove this pattern from the knowledge base?'))return;
+  _sbKnowledgeCache=_sbKnowledgeCache.filter(p=>p.id!==id);
+  const card=document.getElementById('kb-'+id);if(card)card.remove();
+  showToast('Pattern removed from local cache');
+}
+function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function escAttr(s){return(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' ').replace(/\r/g,'');}
+function showToast(msg){
+  let t=document.getElementById('gs-toast');
+  if(!t){t=document.createElement('div');t.id='gs-toast';
+    t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:9px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:2000;opacity:0;transition:opacity .2s;';
+    document.body.appendChild(t);}
+  t.textContent=msg;t.style.opacity='1';
+  clearTimeout(t._tid);t._tid=setTimeout(()=>{t.style.opacity='0';},2500);
 }
 
 </script>
