@@ -455,10 +455,10 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
   </div>
   <div id="sb-config-panel" style="margin-top:20px;padding:16px;background:var(--card);border:1px solid var(--border);border-radius:8px;max-width:480px;width:100%;">
     <p style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;margin:0 0 10px;">&#x1F9E0; Supabase &#x2014; AI Memory (optional)</p>
-    <input type="text" id="sb-url" placeholder="https://xxxx.supabase.co"
+    <input type="text" id="sb-url" autocomplete="off" spellcheck="false" placeholder="https://xxxx.supabase.co"
       style="width:100%;padding:8px 10px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--text);box-sizing:border-box;margin-bottom:6px;"
       oninput="saveSupabaseCreds()">
-    <input type="password" id="sb-key" placeholder="Supabase anon / public key"
+    <input type="text" id="sb-key" autocomplete="off" spellcheck="false" placeholder="Supabase anon / public key"
       style="width:100%;padding:8px 10px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--text);box-sizing:border-box;margin-bottom:8px;"
       oninput="saveSupabaseCreds()">
     <p style="font-size:11px;margin:0;" id="sb-status">Not connected</p>
@@ -2721,7 +2721,7 @@ function _sbReady(){return!!(_SB_URL&&_SB_KEY);}
 
 function saveSupabaseCreds(){
   const u=document.getElementById('sb-url')?.value.trim()||'';
-  const k=document.getElementById('sb-key')?.value.trim()||'';
+  const k=(document.getElementById('sb-key')?.value||'').replace(/[^\x20-\x7E]/g,'').trim();
   if(u){localStorage.setItem('gs_sb_url',u);_SB_URL=u;}
   if(k){localStorage.setItem('gs_sb_key',k);_SB_KEY=k;}
   _updateSbStatus();
@@ -2729,7 +2729,7 @@ function saveSupabaseCreds(){
 }
 function loadSupabaseCreds(){
   _SB_URL=localStorage.getItem('gs_sb_url')||'';
-  _SB_KEY=localStorage.getItem('gs_sb_key')||'';
+  _SB_KEY=(localStorage.getItem('gs_sb_key')||'').replace(/[^\x20-\x7E]/g,'').trim();
   const uEl=document.getElementById('sb-url');
   const kEl=document.getElementById('sb-key');
   if(uEl&&_SB_URL)uEl.value=_SB_URL;
@@ -2738,6 +2738,12 @@ function loadSupabaseCreds(){
 }
 function _updateSbStatus(){
   const el=document.getElementById('sb-status');if(!el)return;
+  const rawKey=localStorage.getItem('gs_sb_key')||'';
+  const badChars=[...rawKey].some(c=>c.charCodeAt(0)>127);
+  if(badChars){
+    el.textContent='\u26A0\uFE0F Key has invalid characters \u2014 re-copy from Supabase and paste again';
+    el.style.color='var(--red)';return;
+  }
   if(_sbReady()){el.textContent='\u2705 Connected \u2014 AI memory active';el.style.color='var(--green)';}
   else{el.textContent='Not connected \u2014 enter URL and anon key above';el.style.color='var(--dim)';}
 }
