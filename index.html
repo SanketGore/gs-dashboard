@@ -965,6 +965,7 @@ const GITHUB_RAW = 'https://raw.githubusercontent.com/sanketgore/gs-dashboard/ma
 
 async function startApp(){
   initSupabase();
+  _loadSessionCtx();
   // Try raw.githubusercontent.com first — bypasses GitHub Pages CDN cache.
   // Pages CDN can serve stale files for up to 10 min; raw.githubusercontent.com
   // always returns the latest committed content immediately.
@@ -1120,6 +1121,7 @@ function closeUpload(){
   if(!DATA) return;
   document.getElementById('upload-screen').style.display='none';
   document.getElementById('dashboard').style.display='block';
+  setTimeout(()=>runMonitoring().catch(()=>{}),1500);
 }
 function _updateUploadCloseBtn(){
   const btn=document.getElementById('upload-close-btn');
@@ -2575,6 +2577,14 @@ function renderInventoryTable(){
 }
 
 
+window.addEventListener('beforeunload',()=>{
+  if(!_sbReady()||!_history.length) return;
+  const turns=_history.filter(m=>m.role==='user').map(m=>m.content.slice(0,60));
+  if(!turns.length) return;
+  const s='Session '+new Date().toLocaleDateString('en-IN')+': Asked: '+turns.slice(-3).join('; ');
+  saveSessionMemory(s,{}).catch(()=>{});
+});
+
 // ── Dark mode ─────────────────────────────────────────────
 function toggleDark(){
   const isDark=document.body.classList.toggle('dark-mode');
@@ -2947,6 +2957,12 @@ async function getCurationQueue(limit){
     'success=eq.true&promoted=eq.false'
     +'&order=created_at.desc&limit='+(limit||30));
 }
+let _sessionCtx='';
+async function _loadSessionCtx(){
+  try{const m=await loadSessionMemory();if(m){_sessionCtx=m;console.log('[Memory]',m.length,'chars');}}
+  catch(e){}
+}
+
 function initSupabase(){
   loadSupabaseCreds();
   setTimeout(()=>_preloadKnowledge().catch(()=>{}),500);
@@ -3052,6 +3068,85 @@ function showToast(msg){
     document.body.appendChild(t);}
   t.textContent=msg;t.style.opacity='1';
   clearTimeout(t._tid);t._tid=setTimeout(()=>{t.style.opacity='0';},2500);
+}
+
+
+async function runMonitoring(){
+  if(!DATA) return;
+  const alerts=[];
+  const ref=(DATA.exported_at||'').slice(0,10)||new Date().toISOString().slice(0,10);
+  const lb=_getLookbackRows(30);const soldMap={};
+  lb.forEach(r=>{soldMap[r.product_name]=(soldMap[r.product_name]||0)+(+r.quantity||0);});
+  (DATA.products||[]).forEach(p=>{
+    const rate=(soldMap[p.product_name]||0)/30;if(rate===0)return;
+    const cover=Math.round((+p.current_stock||0)/rate);
+    if(cover<3)alerts.push({type:'low_stock',product:p.product_name,value:cover,threshold:3,
+      message:p.product_name+': only '+cover+' day(s) of stock left'});
+  });
+  const ss=DATA.sales_summary||[];const pMap={};
+  ss.filter(r=>String(r.reference_invoice_id||'').startsWith('PAY-')&&r.reference_invoice)
+    .forEach(r=>{const k=r.reference_invoice;if(!pMap[k]||r.sale_date<pMap[k])pMap[k]=r.sale_date;});
+  const odMap={};
+  ss.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-')).forEach(r=>{
+    if(!r.sale_date)return;
+    const tp=Math.max(0,(+r.total_bill||0)-(+r.discount_amount||0)-(+r.cash_received||0)-(+r.upi_received||0));
+    if(tp<1)return;
+    const days=Math.round((new Date(pMap[r.reference_invoice_id]||ref)-new Date(r.sale_date))/86400000);
+    if(days>60){const cu=r.customer_name||'';odMap[cu]=(odMap[cu]||0)+tp;}
+  });
+  Object.entries(odMap).filter(([,v])=>v>500).forEach(([cu,v])=>{
+    alerts.push({type:'overdue_invoice',customer:cu,value:Math.round(v),threshold:60,
+      message:cu+': Rs'+Math.round(v).toLocaleString('en-IN')+' overdue >60 days'});
+  });
+  if(!alerts.length)return;
+  let bar=document.getElementById('monitoring-alerts');
+  if(!bar){bar=document.createElement('div');bar.id='monitoring-alerts';
+    bar.style.cssText='margin:8px 16px;padding:10px 14px;background:rgba(239,68,68,.07);'
+      +'border:1px solid rgba(239,68,68,.25);border-radius:8px;font-size:12px;color:var(--red);';
+    const kpi=document.getElementById('kpi-row');if(kpi)kpi.parentNode.insertBefore(bar,kpi);}
+  bar.innerHTML='<strong>\u26a1 Proactive Alerts</strong><ul style="margin:6px 0 0 16px;padding:0;">'
+    +alerts.map(a=>'<li>'+a.message+'</li>').join('')+'</ul>';
+  for(const a of alerts){
+    const p=await isAlertPersistent(a.type,a.product,a.customer,7).catch(()=>false);
+    if(p)bar.innerHTML=bar.innerHTML.replace(a.message,a.message+' <span style="color:var(--orange);font-weight:700;">[recurring]</span>');
+    logAlert(a.type,a.message,a.value,a.threshold,a.product||null,a.customer||null).catch(()=>{});
+  }
+  console.log('[Monitoring]',alerts.length,'alerts');
+}
+
+async function _planAndExecute(question,codeSys,loader){
+  try{
+    loader.textContent='Planning...';
+    const pp=[{role:'system',content:'Break this complex business question into 2-4 specific sub-questions answerable by a single data query each. Reply ONLY with a JSON array of strings.'},
+      {role:'user',content:question}];
+    const pr=await _callGemini('gemini-2.5-flash',pp,300);
+    let subQs=[];
+    try{const m=pr.match(/\[.*?\]/s);if(m)subQs=JSON.parse(m[0]);}catch(e){}
+    if(!subQs.length||subQs.length<2)return null;
+    const subR=[];
+    for(let i=0;i<subQs.length;i++){
+      loader.textContent='Part '+(i+1)+'/'+subQs.length+'...';
+      try{
+        const sp=[{role:'system',content:codeSys},{role:'user',content:subQs[i]}];
+        const sr=await _callGemini('gemini-2.5-flash',sp,800);
+        const sc=extractCode(sr);
+        if(sc){const{result,error}=sandboxExec(sc);if(!error&&result)subR.push({question:subQs[i],result:result.slice(0,500)});}
+      }catch(e){}
+    }
+    if(!subR.length)return null;
+    loader.textContent='Synthesising...';
+    const synthP=[
+      {role:'system',content:'Synthesise these sub-answers into one clear markdown response for: "'+question+'". Include all numbers. Do NOT invent data.'},
+      {role:'user',content:subR.map(r=>'Q: '+r.question+'\nA: '+r.result).join('\n\n')}
+    ];
+    return await _callGemini('gemini-2.5-flash',synthP,1500)||null;
+  }catch(e){console.warn('[Decomp]',e.message);return null;}
+}
+
+function _isComplexQuestion(q){
+  const s=/\b(and|also|plus|both|all|compare|versus|vs|breakdown|summary|review|overview|full|complete|across|by month|by product|by customer|trend)\b/i;
+  const e=(q.match(/\b(product|customer|location|month|invoice|stock|revenue|profit|expense|payment|outstanding)\b/gi)||[]).length;
+  return s.test(q)&&e>=3;
 }
 
 </script>
