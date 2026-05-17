@@ -2400,32 +2400,79 @@ function _getLookbackRows(days){const ref=(DATA&&DATA.exported_at)?DATA.exported
 function getStockCoverDays(productName,lookbackDays){const lb=lookbackDays||30;const prod=(DATA.products||[]).find(p=>p.product_name===productName);if(!prod)return{error:'Product not found: '+productName};const sold=_getLookbackRows(lb).filter(r=>r.product_name===productName).reduce((s,r)=>s+(+r.quantity||0),0);const rate=sold/lb,stock=+prod.current_stock||0;const cover=rate>0?Math.round(stock/rate):9999;return{product:productName,currentStock:stock,packSize:+prod.pack_size||1,soldLast30:sold,dailyRate:Math.round(rate*10)/10,coverDays:cover>=9999?'no recent sales':cover};}
 function getPurchaseRecommendation(targetDays,lookbackDays){const lb=lookbackDays||30,td=targetDays||10;const sold={};_getLookbackRows(lb).forEach(r=>{sold[r.product_name]=(sold[r.product_name]||0)+(+r.quantity||0);});return (DATA.products||[]).filter(p=>sold[p.product_name]>0).map(p=>{const rate=sold[p.product_name]/lb,stock=+p.current_stock||0,pack=+p.pack_size||1;const cover=Math.round(stock/rate);if(cover>=td)return null;const boxes=Math.ceil((Math.ceil(rate*td)-stock)/pack);return{product:p.product_name,currentStock:stock,dailyRate:Math.round(rate*10)/10,coverDays:cover,boxesToBuy:boxes,estimatedCost:Math.round(boxes*(+p.pack_cost||0))};}).filter(Boolean).sort((a,b)=>a.coverDays-b.coverDays);}
 function getExpiringStock(days, referenceDate){
-  // Returns [{product_name, expiry_date, quantity, batch_id, total_cost, days_to_expiry}]
-  // for stock_in batches expiring within `days` days of referenceDate.
-  // Uses stock_in expiry_date (per purchase batch) and matches remaining stock.
-  // Always use actual current date (not exported_at) unless caller specifies
-  const ref = referenceDate ? new Date(referenceDate) : new Date();
-  ref.setHours(0,0,0,0); // normalise to midnight
-  const cutoff = new Date(ref);
-  cutoff.setDate(cutoff.getDate() + (days||45));
-  const cutStr = cutoff.toISOString().slice(0,10);
-  const refStr = ref.toISOString().slice(0,10);
+  // ── Local date helper (avoids UTC timezone shift for IST users) ──
+  function localDateStr(d){
+    return d.getFullYear()+'-'
+      +String(d.getMonth()+1).padStart(2,'0')+'-'
+      +String(d.getDate()).padStart(2,'0');
+  }
 
+  const ref    = referenceDate ? new Date(referenceDate) : new Date();
+  const refStr = localDateStr(ref);
+  const cutoff = new Date(ref);
+  cutoff.setDate(cutoff.getDate()+(days||45));
+  const cutStr = localDateStr(cutoff);
+
+  // ── Net sold per batch (batch_id in stock_out = transaction_id in stock_in) ──
+  const soldByBatch={};
+  (DATA.stock_out||[]).forEach(r=>{
+    if(r.batch_id && r.quantity)
+      soldByBatch[r.batch_id]=(soldByBatch[r.batch_id]||0)+(+r.quantity||0);
+  });
+
+  // ── Batches expiring within window with net remaining stock > 0 ──
   return (DATA.stock_in||[])
-    .filter(r => r.expiry_date && r.expiry_date > refStr && r.expiry_date <= cutStr)
-    .map(r => ({
-      product_id:    r.product_id,
-      product_name:  r.product_name || r.product_id,
-      batch_id:      r.transaction_id || null,
-      expiry_date:   r.expiry_date,
-      quantity:      +r.quantity || 0,
-      unit_cost:     +r.unit_cost || 0,
-      total_cost:    +r.total_cost || 0,
-      days_to_expiry: Math.round((new Date(r.expiry_date)-ref)/86400000)
-    }))
-    .sort((a,b) => a.days_to_expiry - b.days_to_expiry);
+    .filter(r=> r.expiry_date && r.expiry_date>=refStr && r.expiry_date<=cutStr)
+    .map(r=>{
+      const purchased=+r.quantity||0;
+      const sold=soldByBatch[r.transaction_id]||0;
+      const remaining=Math.max(0,purchased-sold);
+      return{
+        product_id:    r.product_id,
+        product_name:  r.product_name||r.product_id,
+        batch_id:      r.transaction_id||null,
+        expiry_date:   r.expiry_date,
+        purchased_qty: purchased,
+        sold_qty:      sold,
+        remaining_qty: remaining,
+        unit_cost:     +r.unit_cost||0,
+        total_cost:    Math.round(remaining*(+r.unit_cost||0)),
+        days_to_expiry:Math.round((new Date(r.expiry_date)-ref)/86400000)
+      };
+    })
+    .filter(r=>r.remaining_qty>0)
+    .sort((a,b)=>a.days_to_expiry-b.days_to_expiry);
 }
 
+function getExpiredStockWithRemaining(){
+  // Returns batches that are ALREADY past expiry but still have unsold stock
+  function localDateStr(d){
+    return d.getFullYear()+'-'
+      +String(d.getMonth()+1).padStart(2,'0')+'-'
+      +String(d.getDate()).padStart(2,'0');
+  }
+  const todayStr=localDateStr(new Date());
+  const soldByBatch={};
+  (DATA.stock_out||[]).forEach(r=>{
+    if(r.batch_id&&r.quantity)
+      soldByBatch[r.batch_id]=(soldByBatch[r.batch_id]||0)+(+r.quantity||0);
+  });
+  return (DATA.stock_in||[])
+    .filter(r=>r.expiry_date&&r.expiry_date<todayStr)
+    .map(r=>{
+      const remaining=Math.max(0,(+r.quantity||0)-(soldByBatch[r.transaction_id]||0));
+      return{
+        product_name:r.product_name||r.product_id,
+        batch_id:r.transaction_id||null,
+        expiry_date:r.expiry_date,
+        remaining_qty:remaining,
+        unit_cost:+r.unit_cost||0,
+        total_cost:Math.round(remaining*(+r.unit_cost||0))
+      };
+    })
+    .filter(r=>r.remaining_qty>0)
+    .sort((a,b)=>a.expiry_date.localeCompare(b.expiry_date));
+}
 function getLateCustomers(minDaysLate,minMonths){const minD=minDaysLate||30,minM=minMonths||3;const ss=DATA.sales_summary||[];const ref=(DATA&&DATA.exported_at)?DATA.exported_at.slice(0,10):new Date().toISOString().slice(0,10);const payMap={};ss.filter(r=>String(r.reference_invoice_id||'').startsWith('PAY-')&&r.reference_invoice&&r.sale_date).forEach(r=>{const k=r.reference_invoice;if(!payMap[k]||r.sale_date<payMap[k])payMap[k]=r.sale_date;});const custMonths={};ss.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-')).forEach(r=>{if(!r.sale_date)return;const settle=payMap[r.reference_invoice_id]||ref;const days=Math.round((new Date(settle)-new Date(r.sale_date))/86400000);if(days>minD){const cust=r.customer_name||'',month=r.sale_date.slice(0,7);if(!custMonths[cust])custMonths[cust]=new Set();custMonths[cust].add(month);}});return Object.entries(custMonths).filter(([,s])=>s.size>=minM).map(([c,s])=>({customer:c,monthCount:s.size,months:[...s].sort().join(', ')})).sort((a,b)=>b.monthCount-a.monthCount);}
 
 async function ask(){
@@ -3222,70 +3269,103 @@ function _isComplexQuestion(q){
 // ════════════════════════════════════════════════════════════════
 function renderExpiryTable(){
   if(!DATA) return;
-  const daysInput = document.getElementById('expiry-days-input');
-  const days = parseInt(daysInput?.value||'45')||45;
-  const wrap  = document.getElementById('expiry-table-wrap');
-  const sumEl = document.getElementById('expiry-summary');
-  const todayLabel = document.getElementById('expiry-today-label');
+  const daysInput=document.getElementById('expiry-days-input');
+  const days=parseInt(daysInput?.value||'45')||45;
+  const wrap =document.getElementById('expiry-table-wrap');
+  const sumEl=document.getElementById('expiry-summary');
+  const todayLabel=document.getElementById('expiry-today-label');
   if(!wrap) return;
 
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  const todayStr = today.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
-  if(todayLabel) todayLabel.textContent = '(Today: '+todayStr+')';
-
-  const rows = getExpiringStock(days, null); // null = use today
-
-  if(!rows.length){
-    wrap.innerHTML = '<p style="font-size:12px;color:var(--dim);padding:8px 0;">✅ No stock expiring in the next '+days+' days.</p>';
-    if(sumEl) sumEl.style.display='none';
-    return;
+  function localDateStr(d){
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   }
+  const todayStr=new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  if(todayLabel) todayLabel.textContent='(Today: '+todayStr+')';
 
-  // Summary totals
-  const totalQty  = rows.reduce((s,r)=>s+(r.quantity||0),0);
-  const totalCost = rows.reduce((s,r)=>s+(r.total_cost||0),0);
+  const rows=getExpiringStock(days,null);
+  const expired=getExpiredStockWithRemaining();
 
-  // Badge helper
   function badge(d){
+    if(d<=0)  return '<span class="expiry-badge urgent">Today</span>';
     if(d<=15) return '<span class="expiry-badge urgent">'+d+'d</span>';
     if(d<=30) return '<span class="expiry-badge warn">'+d+'d</span>';
     return '<span class="expiry-badge ok">'+d+'d</span>';
   }
 
-  wrap.innerHTML =
-    '<div style="overflow-x:auto;">' +
-    '<table class="expiry-table">' +
-    '<thead><tr>' +
-    '<th>Product</th><th>Batch ID</th><th>Expiry Date</th>' +
-    '<th style="text-align:right;">Days Left</th>' +
-    '<th style="text-align:right;">Qty (units)</th>' +
-    '<th style="text-align:right;">Total Cost</th>' +
-    '</tr></thead><tbody>' +
-    rows.map(r=>{
-      const rowClass = r.days_to_expiry<=15 ? ' class="expiry-urgent"'
-                     : r.days_to_expiry<=30 ? ' class="expiry-warn"' : '';
-      return '<tr'+rowClass+'>' +
-        '<td>'+escHtml(r.product_name||'')+'</td>' +
-        '<td style="font-family:monospace;font-size:10px;">'+escHtml(r.batch_id||'—')+'</td>' +
-        '<td>'+r.expiry_date+'</td>' +
-        '<td style="text-align:right;">'+badge(r.days_to_expiry)+'</td>' +
-        '<td style="text-align:right;font-weight:600;">'+r.quantity.toLocaleString('en-IN')+'</td>' +
-        '<td style="text-align:right;">Rs '+Math.round(r.total_cost).toLocaleString('en-IN')+'</td>' +
-        '</tr>';
-    }).join('') +
-    '</tbody></table></div>';
+  if(!rows.length && !expired.length){
+    wrap.innerHTML='<p style="font-size:12px;color:var(--dim);padding:8px 0;">\u2705 No stock expiring in the next '+days+' days.</p>';
+    if(sumEl) sumEl.style.display='none';
+    return;
+  }
+
+  const totalQty =rows.reduce((s,r)=>s+r.remaining_qty,0);
+  const totalCost=rows.reduce((s,r)=>s+r.total_cost,0);
+
+  let html='';
+
+  if(rows.length){
+    html+='<p style="font-size:11px;color:var(--dim);margin-bottom:8px;">Qty = net remaining (purchased \u2212 already sold from this batch)</p>';
+    html+='<div style="overflow-x:auto;"><table class="expiry-table">'
+      +'<thead><tr>'
+      +'<th>Product</th><th>Batch ID</th><th>Expiry Date</th>'
+      +'<th style="text-align:right;">Days Left</th>'
+      +'<th style="text-align:right;">Purchased</th>'
+      +'<th style="text-align:right;">Sold</th>'
+      +'<th style="text-align:right;">Remaining</th>'
+      +'<th style="text-align:right;">Value at Risk</th>'
+      +'</tr></thead><tbody>'
+      +rows.map(r=>{
+        const rc=r.days_to_expiry<=15?' class="expiry-urgent"':r.days_to_expiry<=30?' class="expiry-warn"':'';
+        return '<tr'+rc+'>'
+          +'<td>'+escHtml(r.product_name)+'</td>'
+          +'<td style="font-family:monospace;font-size:10px;">'+escHtml(r.batch_id||'\u2014')+'</td>'
+          +'<td>'+r.expiry_date+'</td>'
+          +'<td style="text-align:right;">'+badge(r.days_to_expiry)+'</td>'
+          +'<td style="text-align:right;color:var(--dim);">'+r.purchased_qty.toLocaleString('en-IN')+'</td>'
+          +'<td style="text-align:right;color:var(--dim);">'+r.sold_qty.toLocaleString('en-IN')+'</td>'
+          +'<td style="text-align:right;font-weight:700;">'+r.remaining_qty.toLocaleString('en-IN')+'</td>'
+          +'<td style="text-align:right;">Rs\u202f'+r.total_cost.toLocaleString('en-IN')+'</td>'
+          +'</tr>';
+      }).join('')
+      +'</tbody></table></div>';
+  } else {
+    html+='<p style="font-size:12px;color:var(--dim);padding:4px 0;">\u2705 No stock at risk of expiry in the next '+days+' days.</p>';
+  }
+
+  // Expired section
+  if(expired.length){
+    const expQty =expired.reduce((s,r)=>s+r.remaining_qty,0);
+    const expCost=expired.reduce((s,r)=>s+r.total_cost,0);
+    html+='<div style="margin-top:16px;padding:10px 14px;background:rgba(239,68,68,.06);'
+      +'border:1px solid rgba(239,68,68,.25);border-radius:8px;">'
+      +'<p style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px;">'
+      +'\u26A0\uFE0F Already Expired — '+expired.length+' batch'+(expired.length>1?'es':'')+' still in stock'
+      +' &nbsp;\u00B7&nbsp; '+expQty.toLocaleString('en-IN')+' units &nbsp;\u00B7&nbsp; Rs\u202f'+expCost.toLocaleString('en-IN')+'</p>'
+      +'<div style="overflow-x:auto;"><table class="expiry-table">'
+      +'<thead><tr><th>Product</th><th>Batch ID</th><th>Expired On</th>'
+      +'<th style="text-align:right;">Remaining</th><th style="text-align:right;">Loss Value</th>'
+      +'</tr></thead><tbody>'
+      +expired.map(r=>'<tr class="expiry-urgent">'
+        +'<td>'+escHtml(r.product_name)+'</td>'
+        +'<td style="font-family:monospace;font-size:10px;">'+escHtml(r.batch_id||'\u2014')+'</td>'
+        +'<td>'+r.expiry_date+'</td>'
+        +'<td style="text-align:right;font-weight:700;">'+r.remaining_qty.toLocaleString('en-IN')+'</td>'
+        +'<td style="text-align:right;">Rs\u202f'+r.total_cost.toLocaleString('en-IN')+'</td>'
+        +'</tr>').join('')
+      +'</tbody></table></div></div>';
+  }
+
+  wrap.innerHTML=html;
 
   if(sumEl){
-    sumEl.style.display='block';
-    sumEl.innerHTML =
-      '<strong style="color:var(--red);">⚠️ '+rows.length+' batch'+(rows.length>1?'es':'')+
-      ' expiring in next '+days+' days</strong> &nbsp;·&nbsp; '+
-      'Total units: <strong>'+totalQty.toLocaleString('en-IN')+'</strong> &nbsp;·&nbsp; '+
-      'Total cost: <strong>Rs '+Math.round(totalCost).toLocaleString('en-IN')+'</strong>';
+    sumEl.style.display=rows.length?'block':'none';
+    if(rows.length) sumEl.innerHTML=
+      '<strong style="color:var(--red);">\u26A0\uFE0F '+rows.length+' batch'+(rows.length>1?'es':'')+
+      ' expiring in next '+days+' days</strong> &nbsp;\u00B7&nbsp; '
+      +'Remaining units: <strong>'+totalQty.toLocaleString('en-IN')+'</strong>'
+      +' &nbsp;\u00B7&nbsp; Value at risk: <strong>Rs\u202f'+totalCost.toLocaleString('en-IN')+'</strong>';
   }
 }
-
 </script>
 <!-- Sub-lock Modal -->
 <div id="sl-modal">
