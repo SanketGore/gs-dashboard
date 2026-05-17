@@ -458,6 +458,22 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
   color:#6ee7b7;
 }
 
+
+/* ── Expiry table ─────────────────────────────────────────── */
+.expiry-table{width:100%;border-collapse:collapse;font-size:12px;}
+.expiry-table th{background:var(--accent);color:#fff;padding:7px 10px;
+  text-align:left;font-size:11px;font-weight:600;white-space:nowrap;}
+.expiry-table td{padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text);}
+.expiry-table tbody tr:hover{background:var(--bg);}
+.expiry-table tbody tr:nth-child(even){background:rgba(37,99,235,.03);}
+.expiry-urgent td{background:rgba(239,68,68,.07)!important;color:var(--text);}
+.expiry-warn   td{background:rgba(245,158,11,.07)!important;color:var(--text);}
+.expiry-badge{display:inline-block;padding:2px 7px;border-radius:10px;
+  font-size:10px;font-weight:700;white-space:nowrap;}
+.expiry-badge.urgent{background:rgba(239,68,68,.15);color:var(--red);}
+.expiry-badge.warn{background:rgba(245,158,11,.15);color:var(--orange);}
+.expiry-badge.ok{background:rgba(16,185,129,.12);color:var(--green);}
+
 </style>
 </head>
 <body>
@@ -799,6 +815,29 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
         <div id="restock-result"></div>
       </div>
     </div>
+
+      <!-- Expiry Tracker ──────────────────────────────────── -->
+      <div class="chart-card fade-in" style="margin-top:12px;">
+        <div class="chart-title">📦 Expiring Stock Tracker</div>
+        <p style="font-size:12px;color:var(--dim);margin-bottom:14px;">
+          Shows purchase batches from StockIn whose expiry date falls within the entered number of days from <strong>today</strong>.
+        </p>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+          <label style="font-size:12px;font-weight:600;color:var(--dim);">Check stock expiring within</label>
+          <input type="number" id="expiry-days-input" value="45" min="1" max="365"
+            style="width:72px;padding:6px 10px;font-size:13px;font-family:inherit;
+            border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);"
+            onchange="renderExpiryTable()" oninput="renderExpiryTable()">
+          <label style="font-size:12px;font-weight:600;color:var(--dim);">days from today</label>
+          <span id="expiry-today-label" style="font-size:11px;color:var(--dim);"></span>
+        </div>
+        <div id="expiry-table-wrap">
+          <p style="font-size:12px;color:var(--dim);">Load data to view expiring stock.</p>
+        </div>
+        <div id="expiry-summary" style="margin-top:10px;padding:10px 14px;
+          background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);
+          border-radius:6px;font-size:12px;display:none;"></div>
+      </div>
   </div>
 
   <!-- ── TAB: Additional Insights ─────────────────────────────── -->
@@ -1421,6 +1460,7 @@ function renderTab(id){
   } else if(id==='forecast'){
     safeRender(()=>renderForecast(invOnly,f),'forecast');
     safeRender(()=>renderInventoryTable(),'inv-table');
+    safeRender(()=>renderExpiryTable(),'expiry-table');
   } else if(id==='insights'){
     safeRender(()=>renderStockCover(f),'stock-cover');
     safeRender(()=>renderPurchVsSales(f),'purch-vs-sales');
@@ -2363,9 +2403,9 @@ function getExpiringStock(days, referenceDate){
   // Returns [{product_name, expiry_date, quantity, batch_id, total_cost, days_to_expiry}]
   // for stock_in batches expiring within `days` days of referenceDate.
   // Uses stock_in expiry_date (per purchase batch) and matches remaining stock.
-  const ref = referenceDate
-    ? new Date(referenceDate)
-    : (DATA&&DATA.exported_at ? new Date(DATA.exported_at.slice(0,10)) : new Date());
+  // Always use actual current date (not exported_at) unless caller specifies
+  const ref = referenceDate ? new Date(referenceDate) : new Date();
+  ref.setHours(0,0,0,0); // normalise to midnight
   const cutoff = new Date(ref);
   cutoff.setDate(cutoff.getDate() + (days||45));
   const cutStr = cutoff.toISOString().slice(0,10);
@@ -3174,6 +3214,76 @@ function _isComplexQuestion(q){
   const s=/\b(and|also|plus|both|all|compare|versus|vs|breakdown|summary|review|overview|full|complete|across|by month|by product|by customer|trend)\b/i;
   const e=(q.match(/\b(product|customer|location|month|invoice|stock|revenue|profit|expense|payment|outstanding)\b/gi)||[]).length;
   return s.test(q)&&e>=3;
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// EXPIRY TRACKER TABLE
+// ════════════════════════════════════════════════════════════════
+function renderExpiryTable(){
+  if(!DATA) return;
+  const daysInput = document.getElementById('expiry-days-input');
+  const days = parseInt(daysInput?.value||'45')||45;
+  const wrap  = document.getElementById('expiry-table-wrap');
+  const sumEl = document.getElementById('expiry-summary');
+  const todayLabel = document.getElementById('expiry-today-label');
+  if(!wrap) return;
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const todayStr = today.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  if(todayLabel) todayLabel.textContent = '(Today: '+todayStr+')';
+
+  const rows = getExpiringStock(days, null); // null = use today
+
+  if(!rows.length){
+    wrap.innerHTML = '<p style="font-size:12px;color:var(--dim);padding:8px 0;">✅ No stock expiring in the next '+days+' days.</p>';
+    if(sumEl) sumEl.style.display='none';
+    return;
+  }
+
+  // Summary totals
+  const totalQty  = rows.reduce((s,r)=>s+(r.quantity||0),0);
+  const totalCost = rows.reduce((s,r)=>s+(r.total_cost||0),0);
+
+  // Badge helper
+  function badge(d){
+    if(d<=15) return '<span class="expiry-badge urgent">'+d+'d</span>';
+    if(d<=30) return '<span class="expiry-badge warn">'+d+'d</span>';
+    return '<span class="expiry-badge ok">'+d+'d</span>';
+  }
+
+  wrap.innerHTML =
+    '<div style="overflow-x:auto;">' +
+    '<table class="expiry-table">' +
+    '<thead><tr>' +
+    '<th>Product</th><th>Batch ID</th><th>Expiry Date</th>' +
+    '<th style="text-align:right;">Days Left</th>' +
+    '<th style="text-align:right;">Qty (units)</th>' +
+    '<th style="text-align:right;">Total Cost</th>' +
+    '</tr></thead><tbody>' +
+    rows.map(r=>{
+      const rowClass = r.days_to_expiry<=15 ? ' class="expiry-urgent"'
+                     : r.days_to_expiry<=30 ? ' class="expiry-warn"' : '';
+      return '<tr'+rowClass+'>' +
+        '<td>'+escHtml(r.product_name||'')+'</td>' +
+        '<td style="font-family:monospace;font-size:10px;">'+escHtml(r.batch_id||'—')+'</td>' +
+        '<td>'+r.expiry_date+'</td>' +
+        '<td style="text-align:right;">'+badge(r.days_to_expiry)+'</td>' +
+        '<td style="text-align:right;font-weight:600;">'+r.quantity.toLocaleString('en-IN')+'</td>' +
+        '<td style="text-align:right;">Rs '+Math.round(r.total_cost).toLocaleString('en-IN')+'</td>' +
+        '</tr>';
+    }).join('') +
+    '</tbody></table></div>';
+
+  if(sumEl){
+    sumEl.style.display='block';
+    sumEl.innerHTML =
+      '<strong style="color:var(--red);">⚠️ '+rows.length+' batch'+(rows.length>1?'es':'')+
+      ' expiring in next '+days+' days</strong> &nbsp;·&nbsp; '+
+      'Total units: <strong>'+totalQty.toLocaleString('en-IN')+'</strong> &nbsp;·&nbsp; '+
+      'Total cost: <strong>Rs '+Math.round(totalCost).toLocaleString('en-IN')+'</strong>';
+  }
 }
 
 </script>
