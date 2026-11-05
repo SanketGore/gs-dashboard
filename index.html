@@ -277,6 +277,26 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 .ledger-select{padding:6px 10px;font-size:12px;font-family:inherit;border:1px solid var(--border);
   border-radius:4px;background:var(--card);color:var(--text);min-width:200px;}
 .summary-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+/* Searchable customer combobox (Customer Ledger) */
+.lc-wrap{position:relative;display:inline-block;min-width:280px;}
+.lc-input{width:100%;box-sizing:border-box;padding:7px 28px 7px 10px;font-size:12px;font-family:inherit;
+  border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);}
+.lc-input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 2px rgba(41,128,185,0.15);}
+.lc-clear{display:none;position:absolute;right:4px;top:50%;transform:translateY(-50%);border:none;background:transparent;
+  color:var(--dim);cursor:pointer;font-size:12px;padding:4px 6px;line-height:1;}
+.lc-clear:hover{color:var(--red);}
+.lc-list{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;max-height:260px;overflow-y:auto;
+  background:var(--card);border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,0.14);z-index:60;padding:4px 0;}
+.lc-list.open{display:block;}
+.lc-item{padding:6px 12px;font-size:12px;cursor:pointer;color:var(--text);}
+.lc-item.active,.lc-item:hover{background:var(--bg);}
+.lc-item mark{background:rgba(41,128,185,0.22);color:inherit;border-radius:2px;padding:0;}
+.lc-meta{padding:5px 12px;font-size:10px;color:var(--dim);border-top:1px solid var(--border);}
+.lc-empty{padding:9px 12px;font-size:12px;color:var(--dim);}
+.ledger-actions{display:none;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;}
+.ledger-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;}
+.ledger-head .btn{padding:3px 9px;font-size:10px;}
+@media(max-width:600px){.lc-wrap{width:100%;min-width:0;}}
 .chip{padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;}
 .chip-red{background:rgba(231,76,60,0.15);color:var(--red);}
 .chip-green{background:rgba(39,174,96,0.15);color:var(--green);}
@@ -714,24 +734,34 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
         <div class="chart-title" style="margin-bottom:10px;">📋 Customer Ledger</div>
         <div class="ledger-select-wrap">
           <label style="font-size:12px;font-weight:600;color:var(--dim);">Select Customer:</label>
-          <select class="ledger-select" id="ledger-customer"
-            onchange="renderLedger()">
-            <option value="">— choose a customer —</option>
-          </select>
+          <div class="lc-wrap" id="ledger-combo">
+            <input type="text" class="lc-input" id="ledger-search" autocomplete="off" spellcheck="false"
+              placeholder="Type a name or pick a customer…" role="combobox" aria-expanded="false" aria-controls="ledger-list"
+              onfocus="ledgerOpen()" oninput="ledgerFilter()" onkeydown="ledgerKey(event)" onblur="ledgerBlur()">
+            <button type="button" class="lc-clear" id="ledger-clear" title="Clear selection" onclick="ledgerClear()">✕</button>
+            <div class="lc-list" id="ledger-list" role="listbox"></div>
+            <input type="hidden" id="ledger-customer" value="">
+          </div>
         </div>
         <div id="ledger-summary" class="summary-chips"></div>
+        <div class="ledger-actions" id="ledger-actions">
+          <button class="btn btn-blue btn-sm" onclick="ledgerExportPdf('both')" title="Download a PDF with both tables">📄 Download PDF (both tables)</button>
+          <button class="btn btn-outline btn-sm" id="ledger-share-btn" style="display:none" onclick="ledgerSharePdf()" title="Share the PDF via WhatsApp, email, etc.">📤 Share</button>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" id="ledger-tables-wrap">
           <div>
-            <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px;">
-              🧾 Pending Invoices
+            <div class="ledger-head">
+              <span style="font-size:11px;font-weight:700;color:var(--accent);">🧾 Pending Invoices</span>
+              <button class="btn btn-outline" id="ledger-pdf-inv" style="display:none" onclick="ledgerExportPdf('invoices')">⬇ PDF</button>
             </div>
             <div id="ledger-invoices" style="overflow-y:auto;max-height:280px;">
               <div class="empty-msg">Select a customer to view invoices</div>
             </div>
           </div>
           <div>
-            <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px;">
-              💳 Payment History
+            <div class="ledger-head">
+              <span style="font-size:11px;font-weight:700;color:var(--accent);">💳 Payment History</span>
+              <button class="btn btn-outline" id="ledger-pdf-pay" style="display:none" onclick="ledgerExportPdf('payments')">⬇ PDF</button>
             </div>
             <div id="ledger-payments" style="overflow-y:auto;max-height:280px;">
               <div class="empty-msg">Select a customer to view payments</div>
@@ -1924,31 +1954,141 @@ function renderForecast(invOnly,f){
 // RECEIVABLES: Customer Ledger
 // ══════════════════════════════════════════════
 
+let _ledgerCusts=[], _ledgerShown=[], _ledgerActive=-1, _ledgerState=null, _ledgerCloseTimer=null;
+
 function populateLedgerDropdown(){
-  const sel = document.getElementById('ledger-customer');
-  const f   = getFilters();
+  const f = getFilters();
   // Build customer list from sales_summary (customers who have transactions)
-  const custs = [...new Set(
+  _ledgerCusts = [...new Set(
     (DATA.sales_summary||[])
       .filter(r=>_matchesLocCust(r.customer_name, f))
       .map(r=>r.customer_name)
-  )].sort();
+  )].filter(Boolean).sort((a,b)=>a.localeCompare(b));
 
-  const current = sel.value;
-  sel.innerHTML = '<option value="">— choose a customer —</option>';
-  custs.forEach(c=>{
-    const o=document.createElement('option');
-    o.value=o.textContent=c;
-    if(c===current) o.selected=true;
-    sel.appendChild(o);
-  });
-  // Re-render if a customer is still selected
-  if(sel.value) renderLedger();
-  else {
-    document.getElementById('ledger-invoices').innerHTML='<div class="empty-msg">Select a customer to view invoices</div>';
-    document.getElementById('ledger-payments').innerHTML='<div class="empty-msg">Select a customer to view payments</div>';
-    document.getElementById('ledger-summary').innerHTML='';
+  const hid=document.getElementById('ledger-customer');
+  const inp=document.getElementById('ledger-search');
+  if(hid.value && _ledgerCusts.includes(hid.value)){
+    inp.value=hid.value;
+    renderLedger();                       // keep current selection
+  } else {
+    hid.value=''; inp.value='';
+    ledgerReset();
   }
+  _ledgerSyncClear();
+}
+
+function ledgerReset(){
+  _ledgerState=null;
+  document.getElementById('ledger-invoices').innerHTML='<div class="empty-msg">Select a customer to view invoices</div>';
+  document.getElementById('ledger-payments').innerHTML='<div class="empty-msg">Select a customer to view payments</div>';
+  document.getElementById('ledger-summary').innerHTML='';
+  document.getElementById('ledger-actions').style.display='none';
+  document.getElementById('ledger-pdf-inv').style.display='none';
+  document.getElementById('ledger-pdf-pay').style.display='none';
+}
+
+function _ledgerSyncClear(){
+  const has=!!document.getElementById('ledger-search').value;
+  document.getElementById('ledger-clear').style.display=has?'block':'none';
+}
+
+// ── Combobox behaviour ──────────────────────────────────────────
+function _ledgerMatches(q){
+  const toks=q.toLowerCase().split(/\s+/).filter(Boolean);
+  if(!toks.length) return _ledgerCusts.slice();
+  const hits=_ledgerCusts.filter(n=>{const l=n.toLowerCase();return toks.every(t=>l.includes(t));});
+  // names that START with the first typed word come first
+  return hits.sort((a,b)=>{
+    const sa=a.toLowerCase().startsWith(toks[0])?0:1, sb=b.toLowerCase().startsWith(toks[0])?0:1;
+    return sa-sb || a.localeCompare(b);
+  });
+}
+function _ledgerHighlight(name,q){
+  const toks=q.toLowerCase().split(/\s+/).filter(Boolean), low=name.toLowerCase();
+  const on=new Array(name.length).fill(false);
+  toks.forEach(t=>{let i=low.indexOf(t);while(i>=0){for(let k=i;k<i+t.length;k++)on[k]=true;i=low.indexOf(t,i+t.length);}});
+  let out='',open=false;
+  for(let i=0;i<name.length;i++){
+    if(on[i]&&!open){out+='<mark>';open=true;}
+    if(!on[i]&&open){out+='</mark>';open=false;}
+    out+=name[i].replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  return out+(open?'</mark>':'');
+}
+function _ledgerRenderList(q){
+  const list=document.getElementById('ledger-list');
+  _ledgerShown=_ledgerMatches(q);
+  if(!_ledgerCusts.length){ list.innerHTML='<div class="empty-msg lc-empty">No customers with transactions</div>'; return; }
+  if(!_ledgerShown.length){ list.innerHTML='<div class="lc-empty">No customer matches “'+q.replace(/</g,'&lt;')+'”</div>'; _ledgerActive=-1; return; }
+  const cur=document.getElementById('ledger-customer').value;
+  _ledgerActive=Math.max(0,_ledgerShown.indexOf(cur));
+  list.innerHTML=_ledgerShown.map((n,i)=>
+    '<div class="lc-item'+(i===_ledgerActive?' active':'')+'" role="option" data-i="'+i+'" onmousedown="event.preventDefault()" onclick="ledgerPick('+i+')">'+_ledgerHighlight(n,q)+'</div>'
+  ).join('')+'<div class="lc-meta">'+_ledgerShown.length+' of '+_ledgerCusts.length+' customers</div>';
+  _ledgerScrollActive();
+}
+function _ledgerScrollActive(){
+  const el=document.querySelector('#ledger-list .lc-item.active'); if(el) el.scrollIntoView({block:'nearest'});
+}
+function ledgerOpen(){
+  clearTimeout(_ledgerCloseTimer);
+  const inp=document.getElementById('ledger-search');
+  const sel=document.getElementById('ledger-customer').value;
+  // When a customer is already chosen, show the full list so the user can switch quickly
+  _ledgerRenderList(sel && inp.value===sel ? '' : inp.value);
+  document.getElementById('ledger-list').classList.add('open');
+  inp.setAttribute('aria-expanded','true');
+  if(sel && inp.value===sel) inp.select();
+}
+function ledgerClose(){
+  document.getElementById('ledger-list').classList.remove('open');
+  document.getElementById('ledger-search').setAttribute('aria-expanded','false');
+}
+function ledgerFilter(){
+  const inp=document.getElementById('ledger-search');
+  _ledgerRenderList(inp.value);
+  document.getElementById('ledger-list').classList.add('open');
+  _ledgerSyncClear();
+}
+function ledgerBlur(){
+  // small delay so a click on a list item is processed first
+  _ledgerCloseTimer=setTimeout(()=>{
+    ledgerClose();
+    // revert any half-typed text to the actual selection
+    document.getElementById('ledger-search').value=document.getElementById('ledger-customer').value;
+    _ledgerSyncClear();
+  },120);
+}
+function ledgerKey(e){
+  const list=document.getElementById('ledger-list');
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    e.preventDefault();
+    if(!list.classList.contains('open')) ledgerOpen();
+    if(!_ledgerShown.length) return;
+    _ledgerActive=(_ledgerActive+(e.key==='ArrowDown'?1:-1)+_ledgerShown.length)%_ledgerShown.length;
+    list.querySelectorAll('.lc-item').forEach((el,i)=>el.classList.toggle('active',i===_ledgerActive));
+    _ledgerScrollActive();
+  } else if(e.key==='Enter'){
+    e.preventDefault();
+    if(_ledgerActive>=0 && _ledgerShown[_ledgerActive]!==undefined) ledgerPick(_ledgerActive);
+  } else if(e.key==='Escape'){
+    ledgerClose(); document.getElementById('ledger-search').blur();
+  }
+}
+function ledgerPick(i){
+  const name=_ledgerShown[i]; if(name===undefined) return;
+  clearTimeout(_ledgerCloseTimer);
+  document.getElementById('ledger-customer').value=name;
+  document.getElementById('ledger-search').value=name;
+  _ledgerSyncClear(); ledgerClose();
+  document.getElementById('ledger-search').blur();
+  renderLedger();
+}
+function ledgerClear(){
+  document.getElementById('ledger-customer').value='';
+  document.getElementById('ledger-search').value='';
+  ledgerReset(); _ledgerSyncClear();
+  document.getElementById('ledger-search').focus();
 }
 
 function renderLedger(){
@@ -2042,6 +2182,155 @@ function renderLedger(){
     });
     html+='</tbody></table>';
     document.getElementById('ledger-payments').innerHTML=html;
+  }
+
+  // Keep what's on screen so the PDF export prints exactly the same numbers
+  _ledgerState={cust, invCount:invRows.length, billed:totalBilled, received:totalReceived,
+    outstanding:trueNet, pending:pendInv, payments};
+  document.getElementById('ledger-actions').style.display='flex';
+  document.getElementById('ledger-pdf-inv').style.display='';
+  document.getElementById('ledger-pdf-pay').style.display='';
+  document.getElementById('ledger-share-btn').style.display=(typeof navigator.canShare==='function')?'':'none';
+  _loadPdfLibs().catch(()=>{});   // pre-load in background so export is instant
+}
+
+// ══════════════════════════════════════════════
+// RECEIVABLES: PDF export of customer ledger
+// ══════════════════════════════════════════════
+async function _loadPdfLibs(){
+  const ready=()=>window.jspdf&&window.jspdf.jsPDF&&window.jspdf.jsPDF.API&&typeof window.jspdf.jsPDF.API.autoTable==='function';
+  if(ready()) return;
+  const load=src=>new Promise((res,rej)=>{const t=document.createElement('script');t.src=src;t.onload=res;t.onerror=()=>{t.remove();rej(new Error('load failed: '+src));};document.head.appendChild(t);});
+  const tryAll=async list=>{let err;for(const u of list){try{await load(u);return;}catch(e){err=e;}}throw err;};
+  if(!(window.jspdf&&window.jspdf.jsPDF)){
+    await tryAll(['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js','https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js']);
+  }
+  if(!ready()){
+    await tryAll(['https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js','https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js']);
+  }
+  if(!ready()) throw new Error('PDF library unavailable');
+}
+
+function _pdfRs(v){ return 'Rs. '+Math.round(+v||0).toLocaleString('en-IN'); }
+function _pdfDate(d){
+  const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(d||''); if(!m) return d||'-';
+  const mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1];
+  return m[3]+' '+mon+' '+m[1];
+}
+
+function _ledgerBuildPdf(which){
+  const S=_ledgerState; if(!S) throw new Error('Select a customer first');
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'pt',format:'a4'});
+  const W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight(), M=40;
+  const asOf=(DATA&&DATA.exported_at)?_pdfDate(DATA.exported_at.slice(0,10)):_pdfDate(new Date().toISOString().slice(0,10));
+  const BLUE=[26,86,219], RED=[192,57,43], GREEN=[30,132,73], GREY=[110,120,135];
+
+  // Header
+  doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(...BLUE);
+  doc.text('GS Agencies',M,50);
+  doc.setFontSize(11); doc.setTextColor(...GREY);
+  doc.text(which==='invoices'?'Pending Invoices':which==='payments'?'Payment History':'Customer Statement',W-M,50,{align:'right'});
+  doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.line(M,60,W-M,60);
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(20,28,46);
+  doc.text(S.cust,M,86);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...GREY);
+  doc.text('Balances as of '+asOf,M,100);
+
+  // Summary boxes
+  const boxes=[['Total billed',_pdfRs(S.billed),[20,28,46]],['Total received',_pdfRs(S.received),GREEN],
+               [S.outstanding>0.01?'Outstanding':'Settled',_pdfRs(S.outstanding),S.outstanding>0.01?RED:GREEN]];
+  const bw=(W-2*M-2*10)/3;
+  boxes.forEach((b,i)=>{
+    const x=M+i*(bw+10);
+    doc.setDrawColor(220,226,236); doc.setLineWidth(0.8); doc.roundedRect(x,112,bw,42,4,4);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...GREY); doc.text(b[0],x+10,127);
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(...b[2]); doc.text(b[1],x+10,145);
+  });
+
+  let y=176;
+  const section=(title)=>{
+    if(y>H-140){doc.addPage();y=50;}
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...BLUE); doc.text(title,M,y); y+=8;
+  };
+  const noData=(msg)=>{doc.setFont('helvetica','italic');doc.setFontSize(9.5);doc.setTextColor(...GREY);doc.text(msg,M,y+14);y+=36;};
+  const common={startY:0,margin:{left:M,right:M,bottom:50},theme:'grid',
+    styles:{font:'helvetica',fontSize:8.5,cellPadding:4,lineColor:[225,230,240],lineWidth:0.5,textColor:[20,28,46]},
+    headStyles:{fillColor:BLUE,textColor:255,fontStyle:'bold'},
+    footStyles:{fillColor:[238,242,250],textColor:[20,28,46],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[247,249,253]}};
+
+  if(which==='both'||which==='invoices'){
+    section('Pending Invoices ('+S.pending.length+')');
+    if(!S.pending.length) noData('No pending invoices - all invoices are settled.');
+    else{
+      const totB=S.pending.reduce((a,r)=>a+(+r.total_bill||0),0), totD=S.pending.reduce((a,r)=>a+(+r.trueDue||0),0);
+      doc.autoTable({...common,startY:y,
+        head:[['Date','Invoice','Phys #','Billed','Due']],
+        body:S.pending.map(r=>[_pdfDate(r.sale_date),r.reference_invoice_id||'-',r.physical_invoice_no||'-',_pdfRs(r.total_bill),_pdfRs(r.trueDue)]),
+        foot:[['','','Total',_pdfRs(totB),_pdfRs(totD)]],showFoot:'lastPage',
+        columnStyles:{3:{halign:'right'},4:{halign:'right',textColor:RED,fontStyle:'bold'}},
+        headStyles:{...common.headStyles,halign:'left'},
+        didParseCell:d=>{if(d.section!=='body'&&(d.column.index>=3))d.cell.styles.halign='right';}});
+      y=doc.lastAutoTable.finalY+26;
+    }
+  }
+  if(which==='both'||which==='payments'){
+    section('Payment History ('+S.payments.length+')');
+    if(!S.payments.length) noData('No payments recorded.');
+    else{
+      const tot=S.payments.reduce((a,r)=>[a[0]+(+r.cash_received||0),a[1]+(+r.upi_received||0),a[2]+(+r.discount_amount||0)],[0,0,0]);
+      doc.autoTable({...common,startY:y,
+        head:[['Date','Payment ID','Cash','UPI','Discount','Total']],
+        body:S.payments.map(r=>{const c=+r.cash_received||0,u=+r.upi_received||0,d=+r.discount_amount||0;
+          return[_pdfDate(r.sale_date),r.reference_invoice_id||'-',_pdfRs(c),_pdfRs(u),_pdfRs(d),_pdfRs(c+u+d)];}),
+        foot:[['','Total',_pdfRs(tot[0]),_pdfRs(tot[1]),_pdfRs(tot[2]),_pdfRs(tot[0]+tot[1]+tot[2])]],showFoot:'lastPage',
+        columnStyles:{2:{halign:'right'},3:{halign:'right'},4:{halign:'right'},5:{halign:'right',textColor:GREEN,fontStyle:'bold'}},
+        didParseCell:d=>{if(d.section!=='body'&&d.column.index>=2)d.cell.styles.halign='right';}});
+      y=doc.lastAutoTable.finalY+20;
+    }
+  }
+
+  // Footer on every page
+  const n=doc.getNumberOfPages();
+  for(let i=1;i<=n;i++){
+    doc.setPage(i); doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(150,158,170);
+    doc.text('GS Agencies - '+S.cust,M,H-24);
+    doc.text('Page '+i+' of '+n,W-M,H-24,{align:'right'});
+  }
+  const stamp=(DATA&&DATA.exported_at?DATA.exported_at.slice(0,10):new Date().toISOString().slice(0,10));
+  const kind=which==='invoices'?'Pending_Invoices':which==='payments'?'Payment_History':'Statement';
+  const fname='GS_Agencies_'+S.cust.replace(/[^\w\-]+/g,'_').replace(/^_+|_+$/g,'')+'_'+kind+'_'+stamp+'.pdf';
+  return {doc,fname};
+}
+
+async function ledgerExportPdf(which){
+  if(!_ledgerState){showToast('Select a customer first');return;}
+  try{
+    showToast('Preparing PDF…');
+    await _loadPdfLibs();
+    const {doc,fname}=_ledgerBuildPdf(which||'both');
+    doc.save(fname);
+    showToast('✅ PDF downloaded');
+  }catch(e){
+    console.error('[Ledger PDF]',e);
+    showToast('Could not create PDF: '+(e.message||e));
+  }
+}
+
+async function ledgerSharePdf(){
+  if(!_ledgerState){showToast('Select a customer first');return;}
+  try{
+    await _loadPdfLibs();
+    const {doc,fname}=_ledgerBuildPdf('both');
+    const file=new File([doc.output('blob')],fname,{type:'application/pdf'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:'GS Agencies - '+_ledgerState.cust,text:'Account statement from GS Agencies'});
+    } else { doc.save(fname); showToast('Sharing not supported here - PDF downloaded instead'); }
+  }catch(e){
+    if(e&&e.name==='AbortError') return;      // user closed the share sheet
+    console.error('[Ledger share]',e); showToast('Could not share: '+(e.message||e));
   }
 }
 
@@ -2332,11 +2621,59 @@ function renderSeasonalIndex(){
 }
 
 
+// ── Model registry — the ONE place to edit when a provider retires a model ──
+// (Checked against Groq + Google deprecation pages, Nov 2026.)
+const _MODELS={
+  groqMain:'openai/gpt-oss-120b',      // Groq production model — code generation
+  groqFast:'openai/gpt-oss-20b',       // Groq production model — fast / fallback
+  geminiMain:'gemini-3.8-flash',       // Gemini — code generation fallback
+  geminiFast:'gemini-3.5-flash-lite'   // Gemini — cheap/fast, answer formatting
+};
+const _isGptOss=m=>/^openai\/gpt-oss/.test(m);
+const _isGemini3=m=>/^gemini-3/.test(m);
+async function _apiErr(r){const e=await r.json().catch(()=>({}));return new Error(e?.error?.message||('HTTP '+r.status));}
 const _PROVIDERS={
-  groq:{models:[{id:'llama-3.3-70b-versatile',label:'Llama 3.3 70B'},{id:'llama-4-scout-17b-16e-instruct',label:'Llama 4 Scout 17B'},{id:'llama-3.1-8b-instant',label:'Llama 3.1 8B'}],keyStore:'gs_groq_key',keyPlaceholder:'gsk_...',keyLabel:'Groq API Key',hint:'Free at <a href="https://console.groq.com" target="_blank">console.groq.com</a> &middot; 14,400 req/day',
-    call:async(msgs,key,model,maxTok)=>{const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model,max_tokens:maxTok,temperature:0.1,messages:msgs})});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e?.error?.message||'HTTP '+r.status);}return(await r.json()).choices?.[0]?.message?.content||'';}}
-,  gemini:{models:[{id:'gemma-4-26b-a4b-it',label:'Gemma 4 26B (unlimited TPM ★)'},{id:'gemini-2.5-flash',label:'Gemini 2.5 Flash (250/day)'},{id:'gemini-2.5-flash-lite',label:'Gemini 2.5 Flash-Lite (1000/day)'},{id:'gemini-2.5-pro',label:'Gemini 2.5 Pro (100/day)'}],keyStore:'gs_gemini_key',keyPlaceholder:'AIza...',keyLabel:'Google AI Studio Key',hint:'Free at <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a>',
-    call:async(msgs,key,model,maxTok)=>{const sys=msgs.find(m=>m.role==='system');const turns=msgs.filter(m=>m.role!=='system').map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}));const body={contents:turns,generationConfig:{maxOutputTokens:maxTok,temperature:0.1}};if(sys)body.systemInstruction={parts:[{text:sys.content}]};const url='https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+key;const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e?.error?.message||'HTTP '+r.status);}const d=await r.json();const parts=d.candidates?.[0]?.content?.parts||[];const text=parts.filter(p=>p.text&&!p.thought).map(p=>p.text).join('')||parts.map(p=>p.text||'').join('');return text.trim();}}
+  groq:{
+    models:[{id:_MODELS.groqMain,label:'GPT-OSS 120B ★'},{id:_MODELS.groqFast,label:'GPT-OSS 20B (faster)'}],
+    keyStore:'gs_groq_key',keyPlaceholder:'gsk_...',keyLabel:'Groq API Key',
+    hint:'Free at <a href="https://console.groq.com" target="_blank">console.groq.com</a> &middot; No credit card',
+    call:async(msgs,key,model,maxTok)=>{
+      const body={model,temperature:0.1,messages:msgs};
+      // gpt-oss models "think" first and those tokens count toward the limit → low effort + headroom
+      if(_isGptOss(model)){body.reasoning_effort='low';body.max_completion_tokens=maxTok+1500;}
+      else body.max_tokens=maxTok;
+      const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify(body)});
+      if(!r.ok) throw await _apiErr(r);
+      const t=(await r.json()).choices?.[0]?.message?.content||'';
+      return t.replace(/<think>[\s\S]*?<\/think>/g,'').trim();
+    }},
+  gemini:{
+    models:[{id:_MODELS.geminiMain,label:'Gemini 3.8 Flash ★'},{id:_MODELS.geminiFast,label:'Gemini 3.5 Flash-Lite (fast)'},{id:'gemini-3.1-pro-preview',label:'Gemini 3.1 Pro (preview, slower)'}],
+    keyStore:'gs_gemini_key',keyPlaceholder:'AIza...',keyLabel:'Google AI Studio Key',
+    hint:'Free at <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a>',
+    call:async(msgs,key,model,maxTok)=>{
+      const sys=msgs.find(m=>m.role==='system');
+      const turns=msgs.filter(m=>m.role!=='system').map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}));
+      const g3=_isGemini3(model);
+      // Gemini 3.x: thinking tokens count toward maxOutputTokens, and Google advises leaving temperature at default
+      const build=think=>{
+        const gc={maxOutputTokens:g3?maxTok+1500:maxTok};
+        if(!g3) gc.temperature=0.1;
+        if(think) gc.thinkingConfig={thinkingLevel:'low'};
+        const b={contents:turns,generationConfig:gc};
+        if(sys) b.systemInstruction={parts:[{text:sys.content}]};
+        return b;
+      };
+      const url='https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+key;
+      const post=b=>fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+      let r=await post(build(g3));
+      if(!r.ok&&r.status===400&&g3) r=await post(build(false));   // model rejected thinkingConfig → retry plain
+      if(!r.ok) throw await _apiErr(r);
+      const d=await r.json();
+      const parts=d.candidates?.[0]?.content?.parts||[];
+      const text=parts.filter(p=>p.text&&!p.thought).map(p=>p.text).join('')||parts.map(p=>p.text||'').join('');
+      return text.trim();
+    }}
 };
 let _history=[],_currentProvider='groq';
 function _prov(){return _PROVIDERS[_currentProvider];}
@@ -2683,7 +3020,14 @@ async function ask(){
     return _PROVIDERS.gemini.call(msgs,_geminiKey,model,maxTok);
   }
   async function _callGroq(msgs,maxTok){
-    return _PROVIDERS.groq.call(msgs,_groqKey,'llama-3.3-70b-versatile',maxTok);
+    // Try the model picked in the panel first, then the other Groq models
+    const pref=(_currentProvider==='groq'?_getModel():_MODELS.groqMain);
+    const chain=[pref,..._PROVIDERS.groq.models.map(m=>m.id).filter(m=>m!==pref)];
+    let lastErr;
+    for(const m of chain){
+      try{return await _PROVIDERS.groq.call(msgs,_groqKey,m,maxTok);}catch(e){lastErr=e;console.warn('[Groq] '+m+' failed:',e.message);}
+    }
+    throw lastErr;
   }
 
   // ── STEP 1: Code generation — Groq primary, Gemini Flash fallback ────
@@ -2696,11 +3040,11 @@ async function ask(){
     step1=await _callGroq(_codePrompt,900);
     code=extractCode(step1);
   }catch(e1){
-    // Groq failed — try Gemini 2.5 Flash for code generation
+    // Groq failed — try Gemini for code generation
     if(_geminiKey){
       try{
         loader.textContent='Groq unavailable — trying Gemini Flash...';
-        step1=await _callGemini('gemini-2.5-flash',_codePrompt,900);
+        step1=await _callGemini(_MODELS.geminiMain,_codePrompt,900);
         code=extractCode(step1);
       }catch(e2){
         loader.textContent='All code generation models failed.'; loader.className='am ai err';
@@ -2763,7 +3107,7 @@ async function ask(){
     }
   }
 
-  // ── STEP 3: Format result — Gemma → Flash-Lite → Flash → raw ─────────
+  // ── STEP 3: Format result — Gemini Flash-Lite → Gemini Flash → Groq → raw ─────────
   const _fmtPrompt=[
     {role:'system',content:'You are a formatting assistant. Present the raw data result below in a clean, readable format.\nSTRICT RULES:\n1. Copy ALL customer names, invoice IDs, amounts and dates EXACTLY as they appear in the raw result. Do NOT change, replace or invent any names or numbers.\n2. Do NOT add data that is not in the raw result.\n3. Use Rs for currency amounts.\n4. Use markdown tables or bullet lists to improve readability.\n5. Add a summary line at the end with totals if present in the raw data.'},
     {role:'user',content:'Question: '+q+'\n\nRaw result (copy this data exactly):\n'+result}
@@ -2771,26 +3115,17 @@ async function ask(){
   let ans=null;
 
   if(_geminiKey){
-    // Try Gemma 4 26B first (15s timeout)
-    try{
-      loader.textContent='Formatting...';
-      const _gemmaTimeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),15000));
-      ans=await Promise.race([_callGemini('gemma-4-26b-a4b-it',_fmtPrompt,2000),_gemmaTimeout]);
-    }catch(e1){
-      // Gemma failed — try Flash-Lite
+    for(const m of [_MODELS.geminiFast,_MODELS.geminiMain]){
       try{
-        loader.textContent='Gemma busy — trying Flash-Lite...';
-        ans=await _callGemini('gemini-2.5-flash-lite',_fmtPrompt,2000);
-      }catch(e2){
-        // Flash-Lite failed — try Flash
-        try{
-          loader.textContent='Trying Gemini Flash...';
-          ans=await _callGemini('gemini-2.5-flash',_fmtPrompt,2000);
-        }catch(e3){
-          ans=null; // All Gemini failed — fall through to raw
-        }
-      }
+        loader.textContent='Formatting...';
+        ans=await _callGemini(m,_fmtPrompt,2000);
+        if(ans) break;
+      }catch(e){console.warn('[Gemini] '+m+' failed:',e.message);}
     }
+  }
+  if(!ans&&_groqKey){
+    try{loader.textContent='Formatting...';ans=await _PROVIDERS.groq.call(_fmtPrompt,_groqKey,_MODELS.groqFast,2000);}
+    catch(e){console.warn('[Groq] formatting failed:',e.message);}
   }
 
   // Last resort: show raw result
@@ -3430,15 +3765,15 @@ function renderExpiryTable(){
 <!-- AI Agent -->
 <div id="agent-overlay" onclick="closeAgent()"></div>
 <div id="agent-panel">
-  <div class="ap-head"><div><h3>&#x2728; GS Business Assistant</h3><small id="ap-model-label">Groq &middot; Llama 3.3 70B</small></div><button class="ap-close" onclick="closeAgent()">&#x2715;</button></div>
+  <div class="ap-head"><div><h3>&#x2728; GS Business Assistant</h3><small id="ap-model-label">Groq &middot; GPT-OSS 120B</small></div><button class="ap-close" onclick="closeAgent()">&#x2715;</button></div>
   <div class="ap-setup">
     <div style="display:flex;gap:6px;margin-bottom:8px;">
-      <div style="flex:1;"><label>Provider</label><select id="ap-provider" onchange="onProviderChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;"><option value="groq">Groq (14,400/day)</option><option value="gemini">Google Gemini</option></select></div>
-      <div style="flex:1;"><label>Model</label><select id="ap-model" onchange="onModelChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;"><option value="llama-3.3-70b-versatile">Llama 3.3 70B &#x2605;</option><option value="llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B</option><option value="llama-3.1-8b-instant">Llama 3.1 8B</option></select></div>
+      <div style="flex:1;"><label>Provider</label><select id="ap-provider" onchange="onProviderChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;"><option value="groq">Groq (free tier)</option><option value="gemini">Google Gemini</option></select></div>
+      <div style="flex:1;"><label>Model</label><select id="ap-model" onchange="onModelChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;"><option value="openai/gpt-oss-120b">GPT-OSS 120B &#x2605;</option><option value="openai/gpt-oss-20b">GPT-OSS 20B (faster)</option></select></div>
     </div>
     <label id="ap-key-label">Groq API Key</label>
     <div class="ap-key-row" style="margin-top:3px;"><input type="password" id="ap-key" placeholder="gsk_..." autocomplete="off"><button id="ap-save" onclick="saveKey()">Save</button></div>
-    <p class="ap-hint" id="ap-hint">Free at <a href="https://console.groq.com" target="_blank">console.groq.com</a> &middot; No credit card &middot; 14,400 req/day</p>
+    <p class="ap-hint" id="ap-hint">Free at <a href="https://console.groq.com" target="_blank">console.groq.com</a> &middot; No credit card</p>
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
       <label>Voice Input</label>
       <select id="ap-mic-mode" onchange="onMicModeChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;">
