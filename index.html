@@ -332,7 +332,14 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 .ap-head{padding:13px 16px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
 .ap-head h3{font-size:14px;font-weight:700;margin:0;}.ap-head small{font-size:10px;opacity:.8;}
 .ap-close{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;}
-.ap-setup{padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.ap-setup{border-bottom:1px solid var(--border);flex-shrink:0;}
+.ap-setup>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 14px;font-size:12px;font-weight:700;color:var(--text);user-select:none;}
+.ap-setup>summary::-webkit-details-marker{display:none;}
+.ap-setup>summary small{font-size:10px;font-weight:500;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ap-setup>summary::after{content:'\25BE';color:var(--dim);font-size:12px;margin-left:auto;transition:transform .15s;}
+.ap-setup[open]>summary::after{transform:rotate(180deg);}
+.ap-setup[open]>summary{border-bottom:1px solid var(--border);}
+.ap-set-body{padding:10px 14px 12px;max-height:55vh;overflow-y:auto;}
 .ap-setup label{font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;}
 .ap-key-row{display:flex;gap:6px;margin-bottom:4px;}
 #ap-key{flex:1;padding:7px 10px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;color:var(--text);}
@@ -344,10 +351,10 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 .am.ai{background:var(--bg);border:1px solid var(--border);align-self:flex-start;}
 .am.loading{color:var(--dim);font-style:italic;}
 .am.err{background:#fde8e8;border:1px solid #f1a9a0;color:var(--red);}
-.ap-chips{padding:8px 12px;flex-shrink:0;border-top:1px solid var(--border);}
+.ap-chips{padding:6px 12px 4px;flex-shrink:0;border-top:1px solid var(--border);}
 .ap-chips p{font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;}
-.chip-row{display:flex;flex-wrap:wrap;gap:5px;}
-.sc{font-size:11px;padding:4px 9px;background:var(--bg);border:1px solid var(--border);border-radius:12px;cursor:pointer;color:var(--accent);}
+.chip-row{display:flex;flex-wrap:nowrap;gap:5px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin;}
+.sc{flex-shrink:0;white-space:nowrap;font-size:11px;padding:4px 9px;background:var(--bg);border:1px solid var(--border);border-radius:12px;cursor:pointer;color:var(--accent);}
 .sc:hover{background:var(--blue);color:#fff;border-color:var(--blue);}
 .ap-bar{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--border);flex-shrink:0;}
 #ap-input{flex:1;padding:8px 10px;font-size:13px;font-family:inherit;border:1px solid var(--border);border-radius:6px;resize:none;height:38px;max-height:110px;overflow-y:auto;background:#fafafa;}
@@ -2680,9 +2687,9 @@ let _history=[],_currentProvider='groq';
 function _prov(){return _PROVIDERS[_currentProvider];}
 function _getModel(){return document.getElementById('ap-model')?.value||_prov().models[0].id;}
 function _getKey(){return _keyFor(_currentProvider)||document.getElementById('ap-key')?.value.trim()||'';}
-function onProviderChange(){const p=document.getElementById('ap-provider').value;_currentProvider=p;const pv=_PROVIDERS[p];document.getElementById('ap-model').innerHTML=pv.models.map(m=>`<option value="${m.id}">${m.label}</option>`).join('');document.getElementById('ap-key-label').textContent=pv.keyLabel;document.getElementById('ap-key').placeholder=pv.keyPlaceholder;document.getElementById('ap-hint').innerHTML=pv.hint;document.getElementById('ap-key').value=localStorage.getItem(pv.keyStore)||'';onModelChange();}
-function onModelChange(){const p=_PROVIDERS[_currentProvider];const m=p.models.find(x=>x.id===_getModel())||p.models[0];const lbl=document.getElementById('ap-model-label');if(lbl)lbl.textContent=(_currentProvider==='groq'?'Groq':'Gemini')+' · '+m.label;}
-function openAgent(){document.getElementById('agent-overlay').style.display='block';document.getElementById('agent-panel').classList.add('open');const lp=localStorage.getItem('gs_last_provider')||'groq';document.getElementById('ap-provider').value=lp;onProviderChange();_setupMicButton();}
+function onProviderChange(){const p=document.getElementById('ap-provider').value;_currentProvider=p;const pv=_PROVIDERS[p];document.getElementById('ap-model').innerHTML=pv.models.map(m=>`<option value="${m.id}">${m.label}</option>`).join('');try{const sv=localStorage.getItem('gs_last_model_'+p);if(sv&&pv.models.some(m=>m.id===sv))document.getElementById('ap-model').value=sv;}catch(e){}document.getElementById('ap-key-label').textContent=pv.keyLabel;document.getElementById('ap-key').placeholder=pv.keyPlaceholder;document.getElementById('ap-hint').innerHTML=pv.hint;document.getElementById('ap-key').value=localStorage.getItem(pv.keyStore)||'';onModelChange();}
+function onModelChange(){const p=_PROVIDERS[_currentProvider];const m=p.models.find(x=>x.id===_getModel())||p.models[0];const lbl=document.getElementById('ap-model-label');const t=(_currentProvider==='groq'?'Groq':'Gemini')+' · '+m.label;if(lbl)lbl.textContent=t;const sm=document.getElementById('ap-set-sum');if(sm)sm.textContent=t;try{localStorage.setItem('gs_last_model_'+_currentProvider,m.id);}catch(e){}}
+function openAgent(){document.getElementById('agent-overlay').style.display='block';document.getElementById('agent-panel').classList.add('open');const lp=localStorage.getItem('gs_last_provider')||'groq';document.getElementById('ap-provider').value=lp;onProviderChange();_setupMicButton();const st=document.getElementById('ap-settings');if(st)st.open=!_getKey();}
 function closeAgent(){document.getElementById('agent-overlay').style.display='none';document.getElementById('agent-panel').classList.remove('open');if(_recognition&&_listening)_recognition.stop();if(_mediaRecorder&&_whisperRecording){_whisperCancelled=true;_mediaRecorder.stop();}}
 function saveKey(){const k=document.getElementById('ap-key').value.trim();if(!k){alert('Enter a key.');return;}localStorage.setItem(_prov().keyStore,k);localStorage.setItem('gs_last_provider',_currentProvider);const b=document.getElementById('ap-save');b.textContent='Saved';b.style.background='var(--green)';setTimeout(()=>{b.textContent='Save';b.style.background='';},1600);if(typeof _updateMicModeHint==='function')_updateMicModeHint();}
 function chip(el){document.getElementById('ap-input').value=el.textContent;ask();}
@@ -3459,15 +3466,10 @@ async function runPipeline(q,hist,status,opts){
   let ctx={examples:[],rules:[],entities:{customers:[],products:[]},mode:'none'};
   try{ctx=await ragRetrieve(q,{keywordOnly:opts.keywordOnly});}catch(e){console.warn('[RAG] retrieval failed:',e);}
   const codeSys=_SYS_HEAD()+_SYS_RULES+_ctxBlock(ctx)+(ctx.examples.length?'':_SYS_DEFAULT_EXAMPLES);
+  const used=[];
   const callCode=async msgs=>{
-    let gErr='';
-    if(qKey){
-      try{status('Groq → generating code...');return await _callGroqChain(msgs,900);}
-      catch(e){gErr=e.message;if(!gKey)throw new Error('Groq failed: '+e.message+' (no Gemini key saved as backup)');}
-    }
-    status(qKey?'Groq unavailable — trying Gemini...':'Gemini → generating code...');
-    try{return await _callGeminiKey(_MODELS.geminiMain,msgs,900);}
-    catch(e){throw new Error('All code-generation models failed. '+(gErr?'Groq: '+gErr+' · ':'')+'Gemini: '+e.message);}
+    const r=await _callSelected(msgs,900,status,'generating code');
+    used.push(r.via);return r.text;
   };
 
   // STEP 1 — write code
@@ -3504,28 +3506,38 @@ async function runPipeline(q,hist,status,opts){
     {role:'user',content:'Question: '+q+'\n\nRaw result (copy this data exactly):\n'+result}
   ];
   let ans=null;
-  if(gKey){
-    for(const m of [_MODELS.geminiFast,_MODELS.geminiMain]){
-      try{status('Formatting...');ans=await _callGeminiKey(m,fmtPrompt,2000);if(ans)break;}catch(e){console.warn('[Gemini] '+m+' failed:',e.message);}
-    }
-  }
-  if(!ans&&qKey){
-    try{status('Formatting...');ans=await _PROVIDERS.groq.call(fmtPrompt,qKey,_MODELS.groqFast,2000);}catch(e){console.warn('[Groq] formatting failed:',e.message);}
-  }
+  try{status('Formatting...');const r=await _callSelected(fmtPrompt,2000,status,'formatting');ans=r.text;used.push(r.via);}
+  catch(e){console.warn('[LLM] formatting failed:',e.message);}
   if(!ans)ans=result;
-  return{ok:true,code,result,answer:ans,retrieved:ctx,ms:Date.now()-t0,provValid:prov.valid};
+  return{ok:true,code,result,answer:ans,retrieved:ctx,ms:Date.now()-t0,provValid:prov.valid,via:used};
 }
 async function _callGeminiKey(model,msgs,maxTok){return _PROVIDERS.gemini.call(msgs,_keyFor('gemini'),model,maxTok);}
-async function _callGroqChain(msgs,maxTok){
-  const pref=(_currentProvider==='groq'?_getModel():_MODELS.groqMain);
-  const chain=[pref,..._PROVIDERS.groq.models.map(m=>m.id).filter(m=>m!==pref)];
-  let lastErr;
-  for(const m of chain){
-    try{return await _PROVIDERS.groq.call(msgs,_keyFor('groq'),m,maxTok);}catch(e){lastErr=e;console.warn('[Groq] '+m+' failed:',e.message);}
-  }
-  throw lastErr;
+// ── Model routing: the provider + model chosen in Settings is ALWAYS tried first ──
+//   fallback order: other models of the same provider → models of the other provider (only if its key exists)
+function _modelPlan(){
+  const sel=_currentProvider,mdl=_getModel(),plan=[];
+  const add=(p,m)=>{if(_keyFor(p)&&!plan.some(x=>x.p===p&&x.m===m))plan.push({p,m});};
+  add(sel,mdl);
+  _PROVIDERS[sel].models.forEach(m=>add(sel,m.id));
+  const other=sel==='groq'?'gemini':'groq';
+  _PROVIDERS[other].models.forEach(m=>add(other,m.id));
+  return plan;
 }
-
+async function _callSelected(msgs,maxTok,status,what){
+  const plan=_modelPlan();
+  if(!plan.length)throw new Error('Add a Groq or Gemini API key first.');
+  let lastErr;const errs=[];
+  for(let i=0;i<plan.length;i++){
+    const {p,m}=plan[i];
+    try{
+      if(status)status((p==='groq'?'Groq':'Gemini')+' · '+m+' → '+what+'...');
+      const text=await _PROVIDERS[p].call(msgs,_keyFor(p),m,maxTok);
+      if(!text)throw new Error('empty response');
+      return{text,via:p+':'+m,fellBack:i>0};
+    }catch(e){lastErr=e;errs.push(m+': '+e.message);console.warn('['+p+'] '+m+' failed:',e.message);}
+  }
+  throw new Error('All models failed — '+errs.slice(0,3).join(' | '));
+}
 async function ask(){
   const inp=document.getElementById('ap-input');const q=inp.value.trim();if(!q)return;
   if(!_getKey()){_msg('ai','Please add your '+_prov().keyLabel+' above first.','err');return;}
@@ -3537,6 +3549,8 @@ async function ask(){
   document.getElementById('ap-send').disabled=false;
   if(out.error){loader.textContent=out.error;loader.className='am ai err';_history.pop();return;}
   loader.textContent=out.answer;loader.className='am ai';
+  const _via=(out.via||[]).filter((v,i,a)=>a.indexOf(v)===i);
+  if(_via.length){const f=document.createElement('div');f.style.cssText='font-size:9px;opacity:.55;margin-top:6px;';f.textContent='Answered by '+_via.join(' + ');loader.appendChild(f);}
   if(out.retrieved&&(out.retrieved.examples.length||out.retrieved.rules.length)){
     loader.title='Used '+out.retrieved.examples.length+' verified example(s), '+out.retrieved.rules.length+' rule(s) · search: '+out.retrieved.mode;
   }
@@ -3993,7 +4007,9 @@ function renderExpiryTable(){
 <div id="agent-overlay" onclick="closeAgent()"></div>
 <div id="agent-panel">
   <div class="ap-head"><div><h3>&#x2728; GS Business Assistant</h3><small id="ap-model-label">Groq &middot; GPT-OSS 120B</small></div><button class="ap-close" onclick="closeAgent()">&#x2715;</button></div>
-  <div class="ap-setup">
+  <details class="ap-setup" id="ap-settings">
+    <summary><span>&#x2699;&#xFE0F; Settings</span><small id="ap-set-sum">provider &middot; model &middot; keys &middot; voice</small></summary>
+    <div class="ap-set-body">
     <div style="display:flex;gap:6px;margin-bottom:8px;">
       <div style="flex:1;"><label>Provider</label><select id="ap-provider" onchange="onProviderChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;"><option value="groq">Groq (free tier)</option><option value="gemini">Google Gemini</option></select></div>
       <div style="flex:1;"><label>Model</label><select id="ap-model" onchange="onModelChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;"><option value="openai/gpt-oss-120b">GPT-OSS 120B &#x2605;</option><option value="openai/gpt-oss-20b">GPT-OSS 20B (faster)</option></select></div>
@@ -4017,7 +4033,8 @@ function renderExpiryTable(){
       </select>
       <p class="ap-hint" id="ap-mic-mode-hint">Fast and free, but works best with one language per recording.</p>
     </div>
-  </div>
+    </div>
+  </details>
   <div class="ap-msgs" id="ap-msgs"><div class="am ai">&#x1F44B; Hi! I write code to query your data directly so I can answer any question &mdash; including filtered ones like &ldquo;best location in April&rdquo;. Add your free API key above to start.</div></div>
   <div class="ap-chips"><p>Try asking</p><div class="chip-row">
     <span class="sc" onclick="chip(this)">Highest sale location in April 2026</span>
