@@ -1,0 +1,643 @@
+{
+ "version": 1,
+ "meta": {
+  "note": "Seed knowledge base. Add more from the Review tab and re-export."
+ },
+ "patterns": [
+  {
+   "id": "seed_total_outstanding",
+   "question": "What is the total outstanding amount across all customers?",
+   "variants": [
+    "Total receivables kitna hai",
+    "total baaki kitna aahe",
+    "How much money is pending in the market?",
+    "एकूण थकबाकी किती आहे",
+    "total pending payments from all customers"
+   ],
+   "tags": [
+    "receivables",
+    "outstanding",
+    "total"
+   ],
+   "code": "const all=getAllOutstanding();\nconst total=all.reduce((s,r)=>s+r.outstanding,0);\nreturn 'Total outstanding: Rs'+Math.round(total).toLocaleString('en-IN')+' across '+all.length+' customers';\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_top_debtors",
+   "question": "Which customers owe the most money?",
+   "variants": [
+    "Top 5 customers by outstanding balance",
+    "Sabse jyada baaki kiska hai",
+    "Who has the highest pending amount?",
+    "सर्वात जास्त थकबाकी कोणाची आहे",
+    "biggest defaulters list"
+   ],
+   "tags": [
+    "receivables",
+    "ranking"
+   ],
+   "code": "const n=5;\nreturn getAllOutstanding().slice(0,n).map((r,i)=>(i+1)+'. '+r.customer+': Rs'+Math.round(r.outstanding).toLocaleString('en-IN')).join('\\n');\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_customer_outstanding",
+   "question": "How much does BKC canteen owe us?",
+   "variants": [
+    "BKC canteen ka kitna baaki hai",
+    "outstanding balance of one particular customer",
+    "What is the pending amount for this customer?",
+    "या ग्राहकाची किती थकबाकी आहे"
+   ],
+   "tags": [
+    "receivables",
+    "customer"
+   ],
+   "code": "const r=getCustomerOutstanding('BKC canteen');\nreturn r.customer+' owes Rs'+Math.round(r.total_outstanding).toLocaleString('en-IN')+' across '+r.invoice_count+' pending invoice(s)';\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_customer_pending_invoices",
+   "question": "List the pending invoices of Trupti",
+   "variants": [
+    "Show unpaid bills of a customer",
+    "Which invoices of this customer are still unpaid?",
+    "is customer ke pending bills dikhao",
+    "या ग्राहकाची बाकी बिले दाखवा"
+   ],
+   "tags": [
+    "receivables",
+    "customer",
+    "invoice"
+   ],
+   "code": "const p=getPendingInvoices('Trupti');\nif(!p.length) return 'No pending invoices for Trupti.';\nconst total=p.reduce((s,r)=>s+r.due,0);\nreturn p.map(r=>r.date+' | '+r.invoice_id+' | Billed Rs'+r.billed+' | Due Rs'+r.due).join('\\n')+'\\nTotal due: Rs'+total+' across '+p.length+' invoice(s)';\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_unpaid_month",
+   "question": "unpaid invoices Feb 2026",
+   "variants": [
+    "pending invoices in a given month",
+    "Which bills from February are still unpaid?",
+    "feb mahine ke unpaid bills",
+    "unpaid invoices of last month"
+   ],
+   "tags": [
+    "receivables",
+    "invoice",
+    "month"
+   ],
+   "code": "const p=getPendingInvoices(null).filter(r=>r.date&&r.date.startsWith('2026-02'));\nif(!p.length) return 'No unpaid invoices for Feb 2026.';\nconst total=p.reduce((s,r)=>s+r.due,0);\nreturn p.map(r=>r.date+' | '+r.invoice_id+' | '+r.customer_name+' | Rs'+r.due).join('\\n')+'\\nTotal: '+p.length+' invoices, Rs'+total;\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_top_products_revenue",
+   "question": "top products by revenue",
+   "variants": [
+    "best selling products",
+    "Which products sell the most?",
+    "sabse jyada bikne wala product",
+    "सर्वाधिक विक्री असलेले प्रोडक्ट",
+    "top 10 items by sales value"
+   ],
+   "tags": [
+    "products",
+    "ranking",
+    "sales"
+   ],
+   "code": "const m={};DATA.stock_out.forEach(r=>{m[r.product_name]=(m[r.product_name]||0)+(+r.total_sale||0);});\nreturn Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([p,v])=>p+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\\n');\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_gp_margin_product_month",
+   "question": "gross profit margin by product for March 2026",
+   "variants": [
+    "Which products have the best margin?",
+    "product wise profit percentage",
+    "product-wise GP margin",
+    "nafa kis product me jyada hai"
+   ],
+   "tags": [
+    "profit",
+    "products",
+    "month"
+   ],
+   "code": "// Aggregate FIRST, then compute margin — never per-row\nconst rev={},cost={};\nDATA.stock_out.filter(r=>r.sale_date&&r.sale_date.startsWith('2026-03')).forEach(r=>{\n  rev[r.product_name]=(rev[r.product_name]||0)+(+r.total_sale||0);\n  cost[r.product_name]=(cost[r.product_name]||0)+(+r.buying_rate_at_time||0);\n});\nreturn Object.keys(rev).filter(p=>rev[p]>0).map(p=>({p,margin:Math.round((rev[p]-cost[p])/rev[p]*100*10)/10})).sort((a,b)=>b.margin-a.margin).map(x=>x.p+': '+x.margin+'%').join('\\n');\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_avg_collection_period",
+   "question": "average collection period in days",
+   "variants": [
+    "How long do customers take to pay?",
+    "average days to receive payment",
+    "customers paise kitne din me dete hain",
+    "DSO days sales outstanding"
+   ],
+   "tags": [
+    "receivables",
+    "payment",
+    "days"
+   ],
+   "code": "const ss=DATA.sales_summary;\nconst payMap={};// reference_invoice -> earliest PAY date\nss.filter(r=>String(r.reference_invoice_id||'').startsWith('PAY-')&&r.reference_invoice&&r.sale_date)\n .forEach(r=>{const ref=r.reference_invoice;if(!payMap[ref]||r.sale_date<payMap[ref])payMap[ref]=r.sale_date;});\nconst diffs=ss.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-')&&payMap[r.reference_invoice_id])\n .map(r=>(new Date(payMap[r.reference_invoice_id])-new Date(r.sale_date))/86400000).filter(d=>d>=0&&d<365);\nif(!diffs.length)return 'No matching payment records found.';\nreturn 'Average collection period: '+Math.round(diffs.reduce((s,d)=>s+d,0)/diffs.length)+' days (from '+diffs.length+' matched invoices)';\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_monthly_revenue",
+   "question": "monthly revenue trend",
+   "variants": [
+    "sales month by month",
+    "revenue per month",
+    "How are sales trending?",
+    "mahine wise bikri",
+    "महिन्यानुसार विक्री"
+   ],
+   "tags": [
+    "sales",
+    "month",
+    "trend"
+   ],
+   "code": "const m={};\nDATA.sales_summary.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-')&&r.sale_date)\n .forEach(r=>{const k=r.sale_date.slice(0,7);m[k]=(m[k]||0)+(+r.total_bill||0);});\nreturn Object.keys(m).sort().map(k=>k+': Rs'+Math.round(m[k]).toLocaleString('en-IN')).join('\\n');\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_revenue_month",
+   "question": "What were total sales last month?",
+   "variants": [
+    "revenue last month",
+    "total sales for a particular month",
+    "pichle mahine ki bikri kitni thi",
+    "How much did we sell in September?",
+    "गेल्या महिन्यात किती विक्री झाली"
+   ],
+   "tags": [
+    "sales",
+    "month"
+   ],
+   "code": "const d=new Date(DATA.exported_at.slice(0,7)+'-01T00:00:00');d.setMonth(d.getMonth()-1);\nconst month=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); // last full calendar month, e.g. 2026-10\nconst rows=DATA.sales_summary.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-')&&(r.sale_date||'').startsWith(month));\nconst total=rows.reduce((s,r)=>s+(+r.total_bill||0),0);\nreturn 'Sales in '+month+': Rs'+Math.round(total).toLocaleString('en-IN')+' from '+rows.length+' invoices';\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_gp_month",
+   "question": "How much gross profit did we make last month?",
+   "variants": [
+    "gross profit for a month",
+    "pichle mahine ka nafa kitna hua",
+    "monthly gross profit and margin",
+    "profit last month",
+    "गेल्या महिन्याचा नफा"
+   ],
+   "tags": [
+    "profit",
+    "month"
+   ],
+   "code": "const d=new Date(DATA.exported_at.slice(0,7)+'-01T00:00:00');d.setMonth(d.getMonth()-1);\nconst month=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); // last full calendar month, e.g. 2026-10\nconst rows=DATA.stock_out.filter(r=>(r.sale_date||'').startsWith(month));\nconst rev=rows.reduce((s,r)=>s+(+r.total_sale||0),0),cost=rows.reduce((s,r)=>s+(+r.buying_rate_at_time||0),0);\nconst gp=rev-cost;\nreturn 'Month '+month+': Revenue Rs'+Math.round(rev).toLocaleString('en-IN')+', Cost Rs'+Math.round(cost).toLocaleString('en-IN')+', Gross profit Rs'+Math.round(gp).toLocaleString('en-IN')+' ('+(rev?(gp/rev*100).toFixed(1):0)+'% margin)';\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_sales_by_location",
+   "question": "sales by location",
+   "variants": [
+    "revenue by area",
+    "which town sells the most",
+    "location wise sales",
+    "gaon wise bikri",
+    "कोणत्या गावात जास्त विक्री"
+   ],
+   "tags": [
+    "sales",
+    "location",
+    "ranking"
+   ],
+   "code": "const m={};\nDATA.sales_summary.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-'))\n .forEach(r=>{const l=custLocMap[r.customer_name]||'Unknown';m[l]=(m[l]||0)+(+r.total_bill||0);});\nreturn Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([l,v])=>l+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\\n');\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_top_customers_sales",
+   "question": "top 10 customers by sales",
+   "variants": [
+    "biggest customers by revenue",
+    "Which customers buy the most?",
+    "sabse bada customer kaun hai",
+    "सर्वात मोठे ग्राहक"
+   ],
+   "tags": [
+    "sales",
+    "customer",
+    "ranking"
+   ],
+   "code": "const m={};\nDATA.sales_summary.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-'))\n .forEach(r=>{m[r.customer_name]=(m[r.customer_name]||0)+(+r.total_bill||0);});\nreturn Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([c,v],i)=>(i+1)+'. '+c+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\\n');\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_stock_cover_low",
+   "question": "Which products are running low on stock?",
+   "variants": [
+    "stock kam hai kya",
+    "which items will run out soon",
+    "low stock alert",
+    "kaunsa maal khatam hone wala hai",
+    "कोणता माल संपत आला आहे",
+    "stock cover days"
+   ],
+   "tags": [
+    "stock",
+    "alert"
+   ],
+   "code": "const out=DATA.products.map(p=>getStockCoverDays(p.product_name)).filter(r=>!r.error&&typeof r.coverDays==='number'&&r.coverDays<7).sort((a,b)=>a.coverDays-b.coverDays);\nif(!out.length) return 'No products with less than 7 days of stock.';\nreturn out.map(r=>r.product+': '+r.currentStock+' units, '+r.coverDays+' days of cover (selling '+r.dailyRate+'/day)').join('\\n');\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_purchase_recommendation",
+   "question": "What should I order from the company for the next 10 days?",
+   "variants": [
+    "restock recommendation",
+    "how many boxes should I buy",
+    "kitna maal mangwana hai",
+    "reorder list for next week",
+    "purchase plan"
+   ],
+   "tags": [
+    "stock",
+    "purchase"
+   ],
+   "code": "const r=getPurchaseRecommendation(10,30);\nif(!r.length) return 'Nothing to order — all products have 10+ days of cover.';\nreturn r.map(x=>x.product+': buy '+x.boxesToBuy+' box(es) (cover '+x.coverDays+' days, est. Rs'+x.estimatedCost.toLocaleString('en-IN')+')').join('\\n')+'\\nEstimated total: Rs'+r.reduce((s,x)=>s+x.estimatedCost,0).toLocaleString('en-IN');\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_expiring_stock",
+   "question": "Which stock is expiring in the next 45 days?",
+   "variants": [
+    "near expiry products",
+    "expiry alert",
+    "kaunsa maal expire hone wala hai",
+    "expiring batches",
+    "मुदत संपणारा माल"
+   ],
+   "tags": [
+    "stock",
+    "expiry"
+   ],
+   "code": "const r=getExpiringStock(45,DATA.exported_at.slice(0,10));\nif(!r.length) return 'No stock expiring in the next 45 days.';\nreturn r.map(x=>x.expiry_date+' ('+x.days_to_expiry+'d) | '+x.product_name+' | '+x.remaining_qty+' units | Rs'+x.total_cost).join('\\n')+'\\nTotal at cost: Rs'+r.reduce((s,x)=>s+x.total_cost,0);\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_expired_unsold",
+   "question": "Is any expired stock still unsold?",
+   "variants": [
+    "already expired products in godown",
+    "expired maal remaining",
+    "मुदत संपलेला माल शिल्लक आहे का"
+   ],
+   "tags": [
+    "stock",
+    "expiry"
+   ],
+   "code": "const r=getExpiredStockWithRemaining();\nif(!r.length) return 'No expired stock remaining.';\nreturn r.map(x=>x.expiry_date+' | '+x.product_name+' | '+x.remaining_qty+' units | Rs'+x.total_cost).join('\\n')+'\\nTotal at cost: Rs'+r.reduce((s,x)=>s+x.total_cost,0);\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_late_customers",
+   "question": "Which customers usually pay late?",
+   "variants": [
+    "slow paying customers",
+    "habitual late payers",
+    "kaun customer late paise deta hai",
+    "late payment list"
+   ],
+   "tags": [
+    "receivables",
+    "late",
+    "customer"
+   ],
+   "code": "const r=getLateCustomers(30,3);\nif(!r.length) return 'No customers match the late-payer rule.';\nreturn r.map(x=>x.customer+': late in '+x.monthCount+' months ('+x.months+')').join('\\n');\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_expenses",
+   "question": "Expenses by category",
+   "variants": [
+    "How much did we spend on rent, salary and fuel?",
+    "total kharcha",
+    "expense breakdown",
+    "खर्चाचे तपशील",
+    "where does our money go"
+   ],
+   "tags": [
+    "expense"
+   ],
+   "code": "const m={};DATA.expenses.forEach(e=>{m[e.spent_on]=(m[e.spent_on]||0)+(+e.total_expense||0);});\nconst total=Object.values(m).reduce((s,v)=>s+v,0);\nreturn Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([k,v])=>k+': Rs'+Math.round(v).toLocaleString('en-IN')).join('\\n')+'\\nTotal: Rs'+Math.round(total).toLocaleString('en-IN');\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_collections_month",
+   "question": "How much did we collect last month — cash and UPI?",
+   "variants": [
+    "collections last month",
+    "cash and UPI received",
+    "vasuli kitni hui",
+    "payments received this month",
+    "महिन्याची वसुली"
+   ],
+   "tags": [
+    "payment",
+    "month"
+   ],
+   "code": "const d=new Date(DATA.exported_at.slice(0,7)+'-01T00:00:00');d.setMonth(d.getMonth()-1);\nconst month=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); // last full calendar month, e.g. 2026-10\nlet cash=0,upi=0;\nDATA.sales_summary.filter(r=>(r.sale_date||'').startsWith(month)).forEach(r=>{cash+=+r.cash_received||0;upi+=+r.upi_received||0;});\nreturn 'Collected in '+month+': Cash Rs'+Math.round(cash).toLocaleString('en-IN')+' + UPI Rs'+Math.round(upi).toLocaleString('en-IN')+' = Rs'+Math.round(cash+upi).toLocaleString('en-IN');\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_product_stock",
+   "question": "How much stock of PEPSI COLA 400ml PET30 Rs20 do we have?",
+   "variants": [
+    "current stock of a product",
+    "how many boxes of this product are in the godown",
+    "inventory of one item",
+    "product stock check",
+    "ya product ka stock kitna hai"
+   ],
+   "tags": [
+    "stock",
+    "product"
+   ],
+   "code": "const name='PEPSI COLA 400ml PET30 Rs20';\nconst hits=DATA.products.filter(p=>p.product_name===name);\nif(!hits.length) return 'No matching product.';\nreturn hits.map(p=>{const boxes=Math.floor(p.current_stock/p.pack_size),bottles=p.current_stock%p.pack_size;return p.product_name+': '+p.current_stock+' units ('+boxes+' boxes + '+bottles+' bottles)';}).join('\\n');\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_inventory_value",
+   "question": "What is the total value of stock in hand?",
+   "variants": [
+    "inventory value at cost",
+    "stock ki total kimat",
+    "godown stock worth",
+    "stock valuation",
+    "साठ्याची एकूण किंमत"
+   ],
+   "tags": [
+    "stock",
+    "value"
+   ],
+   "code": "const total=DATA.products.reduce((s,p)=>s+(+p.current_stock||0)*(+p.cost_price_unit||0),0);\nreturn 'Stock value at cost: Rs'+Math.round(total).toLocaleString('en-IN');\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_customer_purchases",
+   "question": "What does Trupti buy? Product-wise purchases of a customer",
+   "variants": [
+    "what did this customer purchase",
+    "customer ne kya kya kharida",
+    "items bought by a customer",
+    "या ग्राहकाने काय खरेदी केले"
+   ],
+   "tags": [
+    "customer",
+    "products",
+    "sales"
+   ],
+   "code": "const name='Trupti';\nconst m={};\nDATA.stock_out.filter(r=>r.customer_name===name).forEach(r=>{const x=m[r.product_name]||(m[r.product_name]={qty:0,amt:0});x.qty+=+r.quantity||0;x.amt+=+r.total_sale||0;});\nconst rows=Object.entries(m).sort((a,b)=>b[1].amt-a[1].amt);\nif(!rows.length) return 'No purchases found for '+name+'.';\nreturn rows.map(([p,x])=>p+': '+x.qty+' units, Rs'+Math.round(x.amt).toLocaleString('en-IN')).join('\\n');\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_customer_payments",
+   "question": "Show the payment history of Trupti",
+   "variants": [
+    "payments received from a customer",
+    "customer ne kab kab paise diye",
+    "payment history of this customer",
+    "या ग्राहकाची पेमेंट हिस्टरी"
+   ],
+   "tags": [
+    "customer",
+    "payment"
+   ],
+   "code": "const name='Trupti';\nconst pays=DATA.sales_summary.filter(r=>r.customer_name===name&&String(r.reference_invoice_id||'').startsWith('PAY-')).sort((a,b)=>(b.sale_date||'').localeCompare(a.sale_date||''));\nif(!pays.length) return 'No separate payments recorded for '+name+'.';\nreturn pays.map(r=>r.sale_date+' | '+r.reference_invoice_id+' | cash Rs'+(+r.cash_received||0)+' | UPI Rs'+(+r.upi_received||0)+' | discount Rs'+(+r.discount_amount||0)).join('\\n');\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_product_sales_month",
+   "question": "How many boxes of PEPSI COLA 400ml PET30 Rs20 were sold last month?",
+   "variants": [
+    "units sold of a product in a month",
+    "pichle mahine kitne box bike",
+    "product sales quantity last month"
+   ],
+   "tags": [
+    "products",
+    "sales",
+    "month"
+   ],
+   "code": "const d=new Date(DATA.exported_at.slice(0,7)+'-01T00:00:00');d.setMonth(d.getMonth()-1);\nconst month=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); // last full calendar month, e.g. 2026-10\nconst name='PEPSI COLA 400ml PET30 Rs20';\nconst prod=DATA.products.find(p=>p.product_name===name);\nconst qty=DATA.stock_out.filter(r=>r.product_name===name&&(r.sale_date||'').startsWith(month)).reduce((s,r)=>s+(+r.quantity||0),0);\nreturn name+' sold in '+month+': '+qty+' units'+(prod?' ('+(qty/(+prod.pack_size||1)).toFixed(1)+' boxes)':'');\n",
+   "created": "2026-11-05"
+  },
+  {
+   "id": "seed_customers_by_location",
+   "question": "How many customers do we have in each location?",
+   "variants": [
+    "customer count by area",
+    "kitne customer kis gaon me hain",
+    "number of customers per town"
+   ],
+   "tags": [
+    "customer",
+    "location"
+   ],
+   "code": "const m={};DATA.customers.forEach(c=>{const l=c.location||'Unknown';m[l]=(m[l]||0)+1;});\nreturn Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([l,n])=>l+': '+n).join('\\n')+'\\nTotal: '+DATA.customers.length;\n",
+   "created": "2026-11-05"
+  }
+ ],
+ "glossary": [
+  {
+   "id": "g_pending",
+   "title": "Pending / outstanding amount",
+   "text": "An invoice's pending amount = total_bill − discount_amount − cash − UPI received at billing, minus any later PAY- rows that point to it through reference_invoice. Do NOT sum the balance_due column or use total_received for this. getPendingInvoices(), getCustomerOutstanding() and getAllOutstanding() already do it correctly.",
+   "keywords": [
+    "pending",
+    "outstanding",
+    "unpaid",
+    "due",
+    "baaki",
+    "receivable",
+    "owe",
+    "balance",
+    "thakbaki",
+    "udhar"
+   ]
+  },
+  {
+   "id": "g_dates",
+   "title": "Dates and \"today\"",
+   "text": "Dates are 'YYYY-MM-DD' strings — compare them as strings. \"Today\" is DATA.exported_at (the last Excel upload), not the real clock. \"This month\" = the month of exported_at (partly complete). \"Last month\" = the previous full calendar month. Build month keys like '2026-10' and use startsWith().",
+   "keywords": [
+    "today",
+    "month",
+    "last",
+    "this",
+    "week",
+    "date",
+    "yesterday",
+    "recent",
+    "mahina",
+    "pichle"
+   ]
+  },
+  {
+   "id": "g_fy",
+   "title": "Financial year",
+   "text": "If the user says financial year, FY or \"this year\" for accounts, use 1 April to 31 March (Indian financial year). The data starts in December 2025.",
+   "keywords": [
+    "financial",
+    "year",
+    "fy",
+    "annual",
+    "yearly",
+    "april"
+   ]
+  },
+  {
+   "id": "g_revenue",
+   "title": "Sales / revenue",
+   "text": "Revenue of an invoice = total_bill on sales_summary rows that are NOT PAY- rows. Product-level revenue = stock_out.total_sale. Monthly totals from both agree. PAY- rows have total_bill 0 and must be excluded when counting invoices.",
+   "keywords": [
+    "revenue",
+    "sales",
+    "turnover",
+    "bikri",
+    "invoice",
+    "count",
+    "billing"
+   ]
+  },
+  {
+   "id": "g_gp",
+   "title": "Gross profit and margin",
+   "text": "stock_out.buying_rate_at_time is the TOTAL cost of that row (not per unit). Gross profit = sum(total_sale) − sum(buying_rate_at_time). Margin % = gross profit ÷ revenue, calculated after summing — never average per-row margins.",
+   "keywords": [
+    "profit",
+    "margin",
+    "gross",
+    "gp",
+    "nafa",
+    "cost"
+   ]
+  },
+  {
+   "id": "g_collections",
+   "title": "Collections (money received)",
+   "text": "Money received = cash_received + upi_received on every sales_summary row: invoice rows hold what was paid at billing, PAY- rows hold later payments. discount_amount reduces what is owed but is not cash.",
+   "keywords": [
+    "collection",
+    "collected",
+    "received",
+    "cash",
+    "upi",
+    "vasuli",
+    "payment"
+   ]
+  },
+  {
+   "id": "g_units",
+   "title": "Units, boxes and bottles",
+   "text": "current_stock and stock_out.quantity are in single units (bottles/cans). pack_size = units per box. Boxes = floor(units ÷ pack_size). cost_price_unit and selling_price_unit are per unit; pack_cost is per box.",
+   "keywords": [
+    "box",
+    "boxes",
+    "bottle",
+    "bottles",
+    "units",
+    "pack",
+    "case",
+    "stock",
+    "quantity"
+   ]
+  },
+  {
+   "id": "g_customers",
+   "title": "Customer names",
+   "text": "Names are typed by hand, so one business can appear twice (e.g. 'nakshatra' and 'Nakshatra hotel'). 'Countersale <town>' rows are cash walk-in sales, not credit customers. When a name appears under ENTITY MATCHES, use exactly that spelling.",
+   "keywords": [
+    "customer",
+    "name",
+    "duplicate",
+    "countersale",
+    "walk-in"
+   ]
+  },
+  {
+   "id": "g_hinglish",
+   "title": "Hindi / Marathi words",
+   "text": "baaki / thakbaki / udhar = outstanding; vasuli = collection; bikri / vikri = sales; maal / saath = stock; kharcha = expenses; nafa = profit; mahina = month; pichle mahine = last month; kitna / kiti = how much; kaun = who; dikhao = show.",
+   "keywords": [
+    "baaki",
+    "baki",
+    "thakbaki",
+    "udhar",
+    "udhari",
+    "vasuli",
+    "bikri",
+    "vikri",
+    "maal",
+    "saath",
+    "kharcha",
+    "kharch",
+    "nafa",
+    "mahina",
+    "mahine",
+    "pichle",
+    "kitna",
+    "kiti",
+    "dikhao",
+    "थकबाकी",
+    "विक्री",
+    "नफा",
+    "खर्च",
+    "साठा",
+    "माल",
+    "वसुली",
+    "महिन्यात",
+    "किती"
+   ],
+   "literal": true
+  },
+  {
+   "id": "g_format",
+   "title": "Number format",
+   "text": "Show money as Rs with Indian digit grouping (1,23,456) using toLocaleString('en-IN'), rounded to whole rupees. 1 lakh = 1,00,000.",
+   "keywords": [
+    "format",
+    "rupees",
+    "lakh",
+    "rs",
+    "amount"
+   ]
+  },
+  {
+   "id": "g_expiry",
+   "title": "Expiry and stock cover",
+   "text": "Expiry is tracked per batch in stock_in — use getExpiringStock(days, referenceDate), which already subtracts sold quantity per batch. Stock cover days = current stock ÷ average daily units sold over the last 30 days; use getStockCoverDays() or getPurchaseRecommendation().",
+   "keywords": [
+    "expiry",
+    "expiring",
+    "cover",
+    "days",
+    "restock",
+    "reorder",
+    "low"
+   ]
+  },
+  {
+   "id": "g_late",
+   "title": "Late payers",
+   "text": "Use getLateCustomers(minDaysLate, minMonths): a customer is a late payer when invoices stayed unpaid longer than minDaysLate days in at least minMonths different months.",
+   "keywords": [
+    "late",
+    "slow",
+    "delay",
+    "defaulter",
+    "overdue",
+    "pay",
+    "paying",
+    "payers",
+    "customers"
+   ]
+  }
+ ]
+}

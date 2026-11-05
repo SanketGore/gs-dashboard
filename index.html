@@ -546,18 +546,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
     &nbsp;·&nbsp;
     <span onclick="clearCacheAndReload()" style="cursor:pointer;color:#c0392b;font-weight:700">🔄 Fetch latest from GitHub</span>
   </div>
-  <div id="sb-config-panel" style="margin-top:20px;padding:16px;background:var(--card);border:1px solid var(--border);border-radius:8px;max-width:480px;width:100%;">
-    <p style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;margin:0 0 10px;">&#x1F9E0; Supabase &#x2014; AI Memory (optional)</p>
-    <input type="text" id="sb-url" autocomplete="off" spellcheck="false" placeholder="https://xxxx.supabase.co"
-      style="width:100%;padding:8px 10px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--text);box-sizing:border-box;margin-bottom:6px;"
-      oninput="saveSupabaseCreds()">
-    <input type="text" id="sb-key" autocomplete="off" spellcheck="false" placeholder="Supabase anon / public key"
-      style="width:100%;padding:8px 10px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--text);box-sizing:border-box;margin-bottom:8px;"
-      oninput="saveSupabaseCreds()">
-    <p style="font-size:11px;margin:0;" id="sb-status">Not connected</p>
-    <p style="font-size:10px;color:var(--dim);margin:5px 0 0;">Safe &#x2014; anon key has read/insert only access via RLS.</p>
   </div>
-</div>
 
 <!-- DASHBOARD -->
 <div id="dashboard">
@@ -907,23 +896,36 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
       <div class="chart-card fade-in">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
           <div class="chart-title" style="margin:0;">🔬 Query Review Queue</div>
-          <div style="display:flex;gap:8px;">
-            <button onclick="loadCurationQueue()" class="btn btn-outline btn-sm">&#x1F504; Refresh</button>
-            <span id="curation-count" style="font-size:11px;color:var(--dim);align-self:center;"></span>
-          </div>
+          <span id="curation-count" style="font-size:11px;color:var(--dim);"></span>
         </div>
-        <p style="font-size:12px;color:var(--dim);margin-bottom:14px;">Successful, provenance-verified queries waiting for review. Promote correct ones to build the AI knowledge base.</p>
-        <div id="curation-not-connected" style="display:none;padding:20px;text-align:center;color:var(--dim);font-size:13px;">&#x26A0;&#xFE0F; Supabase not connected. Enter credentials in the &#x1F4C2; Data panel.</div>
-        <div id="curation-empty" style="display:none;padding:20px;text-align:center;color:var(--dim);font-size:13px;">&#x2705; No queries awaiting review. Ask the bot some questions first!</div>
+        <p style="font-size:12px;color:var(--dim);margin-bottom:14px;">Questions the assistant answered successfully on this browser. If an answer was correct, add it to the knowledge base so similar questions work better next time.</p>
+        <div id="curation-empty" style="display:none;padding:20px;text-align:center;color:var(--dim);font-size:13px;">✅ Nothing waiting for review. Ask the assistant some questions first.</div>
         <div id="curation-list" style="display:flex;flex-direction:column;gap:12px;"></div>
       </div>
       <div class="chart-card fade-in" style="margin-top:12px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-          <div class="chart-title" style="margin:0;">&#x1F4DA; Knowledge Base</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <div class="chart-title" style="margin:0;">📚 Knowledge Base</div>
           <span id="kb-count" style="font-size:11px;color:var(--dim);"></span>
         </div>
-        <p style="font-size:12px;color:var(--dim);margin-bottom:14px;">Promoted patterns used as examples in future bot queries.</p>
+        <p style="font-size:12px;color:var(--dim);margin-bottom:10px;">Verified examples and business rules the assistant looks up before writing code. They live in <b>knowledge_base.json</b> in your GitHub repo; anything you add here stays on this browser until you export it and upload the file to GitHub.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+          <button class="btn btn-blue btn-sm" onclick="kbExport()">⬇ Export knowledge_base.json</button>
+          <button class="btn btn-outline btn-sm" onclick="kbComputeEmbeddings()">🧠 Compute embeddings</button>
+          <button class="btn btn-outline btn-sm" onclick="kbReset()">↺ Discard local changes</button>
+        </div>
+        <p id="kb-status" style="font-size:11px;color:var(--dim);margin:0 0 12px;"></p>
         <div id="kb-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+      </div>
+      <div class="chart-card fade-in" style="margin-top:12px;">
+        <div class="chart-title" style="margin-bottom:6px;">🧪 Test Set</div>
+        <p style="font-size:12px;color:var(--dim);margin-bottom:10px;">Checks the assistant against answers calculated directly from your current data (from <b>golden_tests.json</b>). Run it after changing a model or the knowledge base. <b>Quick</b> is free; <b>Full</b> asks the real questions using your API keys (≈ 1 minute).</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button class="btn btn-blue btn-sm" onclick="evalRun('quick')">▶ Quick check (free)</button>
+          <button class="btn btn-outline btn-sm" onclick="evalRun('full')">▶ Full test (uses API)</button>
+          <button class="btn btn-outline btn-sm" id="eval-dl" style="display:none" onclick="evalDownload()">⬇ Report</button>
+          <span id="eval-status" style="font-size:12px;font-weight:600;color:var(--text);"></span>
+        </div>
+        <div id="eval-results" style="overflow-x:auto;"></div>
       </div>
     </div>
   </div>
@@ -1037,8 +1039,7 @@ function showDashboardAfterLogin(){
 const GITHUB_RAW = 'https://raw.githubusercontent.com/sanketgore/gs-dashboard/main/dashboard_data.json';
 
 async function startApp(){
-  initSupabase();
-  _loadSessionCtx();
+  kbInit();
   // Try raw.githubusercontent.com first — bypasses GitHub Pages CDN cache.
   // Pages CDN can serve stale files for up to 10 min; raw.githubusercontent.com
   // always returns the latest committed content immediately.
@@ -1503,7 +1504,7 @@ function renderTab(id){
     safeRender(()=>renderPurchVsSales(f),'purch-vs-sales');
     safeRender(()=>populateSeasonalDropdown(),'seasonal-dropdown');
   } else if(id==='curation'){
-    loadCurationQueue();
+    renderReviewTab();
   }
 }
 
@@ -2678,7 +2679,7 @@ const _PROVIDERS={
 let _history=[],_currentProvider='groq';
 function _prov(){return _PROVIDERS[_currentProvider];}
 function _getModel(){return document.getElementById('ap-model')?.value||_prov().models[0].id;}
-function _getKey(){return localStorage.getItem(_prov().keyStore)||document.getElementById('ap-key')?.value.trim()||'';}
+function _getKey(){return _keyFor(_currentProvider)||document.getElementById('ap-key')?.value.trim()||'';}
 function onProviderChange(){const p=document.getElementById('ap-provider').value;_currentProvider=p;const pv=_PROVIDERS[p];document.getElementById('ap-model').innerHTML=pv.models.map(m=>`<option value="${m.id}">${m.label}</option>`).join('');document.getElementById('ap-key-label').textContent=pv.keyLabel;document.getElementById('ap-key').placeholder=pv.keyPlaceholder;document.getElementById('ap-hint').innerHTML=pv.hint;document.getElementById('ap-key').value=localStorage.getItem(pv.keyStore)||'';onModelChange();}
 function onModelChange(){const p=_PROVIDERS[_currentProvider];const m=p.models.find(x=>x.id===_getModel())||p.models[0];const lbl=document.getElementById('ap-model-label');if(lbl)lbl.textContent=(_currentProvider==='groq'?'Groq':'Gemini')+' · '+m.label;}
 function openAgent(){document.getElementById('agent-overlay').style.display='block';document.getElementById('agent-panel').classList.add('open');const lp=localStorage.getItem('gs_last_provider')||'groq';document.getElementById('ap-provider').value=lp;onProviderChange();_setupMicButton();}
@@ -2992,151 +2993,6 @@ function getExpiredStockWithRemaining(){
 }
 function getLateCustomers(minDaysLate,minMonths){const minD=minDaysLate||30,minM=minMonths||3;const ss=DATA.sales_summary||[];const ref=(DATA&&DATA.exported_at)?DATA.exported_at.slice(0,10):new Date().toISOString().slice(0,10);const payMap={};ss.filter(r=>String(r.reference_invoice_id||'').startsWith('PAY-')&&r.reference_invoice&&r.sale_date).forEach(r=>{const k=r.reference_invoice;if(!payMap[k]||r.sale_date<payMap[k])payMap[k]=r.sale_date;});const custMonths={};ss.filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-')).forEach(r=>{if(!r.sale_date)return;const settle=payMap[r.reference_invoice_id]||ref;const days=Math.round((new Date(settle)-new Date(r.sale_date))/86400000);if(days>minD){const cust=r.customer_name||'',month=r.sale_date.slice(0,7);if(!custMonths[cust])custMonths[cust]=new Set();custMonths[cust].add(month);}});return Object.entries(custMonths).filter(([,s])=>s.size>=minM).map(([c,s])=>({customer:c,monthCount:s.size,months:[...s].sort().join(', ')})).sort((a,b)=>b.monthCount-a.monthCount);}
 
-async function ask(){
-  const inp=document.getElementById('ap-input');const q=inp.value.trim();if(!q)return;
-  const key=_getKey();
-  if(!key){_msg('ai','Please add your '+_prov().keyLabel+' above first.','err');return;}
-  if(!DATA){_msg('ai','No data loaded. Click Refresh first.','err');return;}
-  inp.value='';document.getElementById('ap-send').disabled=true;
-  _msg('user',q);const loader=_msg('ai','Thinking...','loading');
-  _history.push({role:'user',content:q});
-  // ── Supabase knowledge retrieval (sync, in-memory cache, zero latency) ─
-  let _knowledgeExamples='';
-  if(typeof _matchKnowledge==='function'){
-    try{
-      const _kp=_matchKnowledge(q);
-      if(_kp.length){
-        _knowledgeExamples='\n\nRELEVANT PAST EXAMPLES from your actual data:\n'
-          +_kp.map(p=>'Q: '+p.question+'\n<execute_js>\n'+p.working_code+'\n</execute_js>').join('\n\n');
-        _kp.forEach(p=>_sbUpdate('knowledge_patterns',p.id,{use_count:(p.use_count||0)+1}).catch(()=>{}));
-      }
-    }catch(e){}
-  }
-  const codeSys='You are a data analyst for GS Agencies, Pepsi distributor.\n\nSCHEMA:\n'+dataSchema()+'\n\nCONTEXT:\n'+buildSchemaBlock()+'\n'+_knowledgeExamples+'\n\nHELPERS AVAILABLE IN SCOPE (ALWAYS use these for receivables):\ngetPendingInvoices(custName|null) -> [{invoice_id,customer_name,date,billed,due}] correct tpLedger\ngetCustomerOutstanding(custName) -> {customer,total_outstanding,invoice_count}\ngetAllOutstanding() -> [{customer,outstanding}] sorted desc\ngetStockCoverDays(productName,days=30) -> {product,currentStock,dailyRate,coverDays}\ngetPurchaseRecommendation(targetDays,days=30) -> [{product,dailyRate,coverDays,boxesToBuy,estimatedCost}]\ngetLateCustomers(minDaysLate=30,minMonths=3) -> [{customer,monthCount,months}]\ngetExpiringStock(days=45,referenceDate=null) -> [{product_name,batch_id,expiry_date,purchased_qty,sold_qty,remaining_qty,unit_cost,total_cost,days_to_expiry}]\ngetExpiredStockWithRemaining() -> [{product_name,batch_id,expiry_date,remaining_qty,total_cost}]\nCRITICAL: For ANY expiry/expiring question ALWAYS use getExpiringStock() — NEVER query stock_out for expiry\n\nMANDATORY RULES:\n1. ALWAYS generate <execute_js>...return result;</execute_js> for ANY data question.\n2. NEVER answer data questions from memory or context — ALWAYS query DATA via code.\n3. Use getPendingInvoices() for ANY pending/unpaid invoice question — never recompute manually.\n4. custLocMap is pre-declared — do NOT redeclare it.\n5. Only plain text (no code) for greetings and message drafts.\n6. For ANY expiry/expiring/near-expiry question: use getExpiringStock(days,referenceDate). NEVER use stock_out for expiry — stock_out has sale expiry dates not batch-level remaining stock.\n7. getExpiringStock already deducts sold qty per batch — do NOT manually subtract or filter stock_out.\n\nEXAMPLES:\nQ: unpaid invoices Feb 2026\n<execute_js>\nconst p=getPendingInvoices(null).filter(r=>r.date&&r.date.startsWith(\'2026-02\'));\nif(!p.length) return \'No unpaid invoices for Feb 2026.\';\nconst total=p.reduce((s,r)=>s+r.due,0);\nreturn p.map(r=>r.date+\' | \'+r.invoice_id+\' | \'+r.customer_name+\' | Rs\'+r.due).join(\'\\n\')+\'\\nTotal: \'+p.length+\' invoices, Rs\'+total;\n</execute_js>\nQ: top products by revenue\n<execute_js>\nconst m={};DATA.stock_out.forEach(r=>{m[r.product_name]=(m[r.product_name]||0)+(+r.total_sale||0);});\nreturn Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([p,v])=>p+\': Rs\'+Math.round(v).toLocaleString(\'en-IN\')).join(\'\\n\');\n</execute_js>\n\nQ: gross profit margin by product for March 2026\n<execute_js>\n// Aggregate FIRST, then compute margin — never per-row\nconst rev={},cost={};\nDATA.stock_out.filter(r=>r.sale_date&&r.sale_date.startsWith(\'2026-03\')).forEach(r=>{\n  rev[r.product_name]=(rev[r.product_name]||0)+(+r.total_sale||0);\n  cost[r.product_name]=(cost[r.product_name]||0)+(+r.buying_rate_at_time||0);\n});\nreturn Object.keys(rev).filter(p=>rev[p]>0).map(p=>({\n  p,margin:Math.round((rev[p]-cost[p])/rev[p]*100*10)/10\n})).sort((a,b)=>b.margin-a.margin)\n.map(x=>x.p+\': \'+x.margin+\'%\').join(\'\\n\');\n</execute_js>\n\nQ: average collection period in days\n<execute_js>\nconst ss=DATA.sales_summary;\nconst payMap={};// reference_invoice -> earliest PAY date\nss.filter(r=>String(r.reference_invoice_id||\'\')\ .startsWith(\'PAY-\')&&r.reference_invoice&&r.sale_date)\n.forEach(r=>{const ref=r.reference_invoice;if(!payMap[ref]||r.sale_date<payMap[ref])payMap[ref]=r.sale_date;});\nconst diffs=ss.filter(r=>!String(r.reference_invoice_id||\'\')\ .startsWith(\'PAY-\')&&payMap[r.reference_invoice_id])\n.map(r=>(new Date(payMap[r.reference_invoice_id])-new Date(r.sale_date))/86400000)\n.filter(d=>d>=0&&d<365);\nif(!diffs.length)return\'No matching payment records found.\';\nreturn\'Average collection period: \'+Math.round(diffs.reduce((s,d)=>s+d,0)/diffs.length)+\' days (from \'+diffs.length+\' matched invoices)\';\n</execute_js>';
-  // ── Helper: call Gemini API (same key, different model) ─────────────
-  const _geminiKey=localStorage.getItem('gs_gemini_key')||'';
-  const _groqKey=localStorage.getItem('gs_groq_key')||'';
-  async function _callGemini(model,msgs,maxTok){
-    return _PROVIDERS.gemini.call(msgs,_geminiKey,model,maxTok);
-  }
-  async function _callGroq(msgs,maxTok){
-    // Try the model picked in the panel first, then the other Groq models
-    const pref=(_currentProvider==='groq'?_getModel():_MODELS.groqMain);
-    const chain=[pref,..._PROVIDERS.groq.models.map(m=>m.id).filter(m=>m!==pref)];
-    let lastErr;
-    for(const m of chain){
-      try{return await _PROVIDERS.groq.call(msgs,_groqKey,m,maxTok);}catch(e){lastErr=e;console.warn('[Groq] '+m+' failed:',e.message);}
-    }
-    throw lastErr;
-  }
-
-  // ── STEP 1: Code generation — Groq primary, Gemini Flash fallback ────
-  const _codePrompt=[{role:'system',content:codeSys},..._history.slice(-6)];
-  let step1='';
-  let code=null;
-  try{
-    loader.textContent='Groq → generating code...';
-    if(!_groqKey) throw new Error('no groq key');
-    step1=await _callGroq(_codePrompt,900);
-    code=extractCode(step1);
-  }catch(e1){
-    // Groq failed — try Gemini for code generation
-    if(_geminiKey){
-      try{
-        loader.textContent='Groq unavailable — trying Gemini Flash...';
-        step1=await _callGemini(_MODELS.geminiMain,_codePrompt,900);
-        code=extractCode(step1);
-      }catch(e2){
-        loader.textContent='All code generation models failed.'; loader.className='am ai err';
-        _history.pop(); document.getElementById('ap-send').disabled=false; return;
-      }
-    } else {
-      loader.textContent='Groq failed and no Gemini key saved.'; loader.className='am ai err';
-      _history.pop(); document.getElementById('ap-send').disabled=false; return;
-    }
-  }
-
-  if(!code){
-    // Check if this looks like a genuine conversational reply
-    // (greetings, drafts) vs a hallucinated data answer
-    const _isDataQ=/(invoice|pending|unpaid|revenue|sale|customer|stock|outstanding|product|location|collect|payment)/i.test(q);
-    if(_isDataQ){
-      // Model answered without code for a data question — likely hallucinating
-      loader.textContent='Model answered without executing code. Please rephrase or check your API key.'; 
-      loader.className='am ai err';
-      _history.pop(); document.getElementById('ap-send').disabled=false; return;
-    }
-    // Genuine conversational reply
-    loader.textContent=step1; loader.className='am ai';
-    _history.push({role:'assistant',content:step1});
-    if(_history.length>12)_history=_history.slice(-12);
-    document.getElementById('ap-send').disabled=false; return;
-  }
-
-  // ── STEP 2: Execute code in browser sandbox ───────────────────────────
-  loader.textContent='Running query...';
-  let {result,error}=sandboxExec(code);
-
-  let _queryLogId=null;
-  if(result&&!error){
-    const _fake=(/\b202[0-3]-\d{2}-\d{2}\b/.test(result))||(/\bINV0{1,3}\d{1,3}\b/.test(result))||(/John Smith|Jane Doe|Peter Jones|Alpha Corp|Beta Ltd|Gamma Inc|ABC Corp|XYZ Ltd|PQR Inc|Acme Corp|Test Corp/i.test(result));
-    if(_fake){
-      logQuery({question:q,code,result,success:false,model:'groq',provenanceValid:false}).catch(()=>{});
-      loader.textContent='The model returned example data instead of your actual data. Please rephrase and try again.';
-      loader.className='am ai err';
-      _history.pop();document.getElementById('ap-send').disabled=false;return;
-    }
-    // Provenance check + log to Supabase (non-blocking)
-    const _prov=_validateProvenance(result);
-    if(!_prov.valid) console.warn('[Supabase] Provenance warnings:',_prov.warnings);
-    logQuery({question:q,code,result,success:true,model:'groq',provenanceValid:_prov.valid})
-      .then(row=>{if(row&&row.id){_queryLogId=row.id;console.log('[Supabase] Logged query id:',row.id);}}).catch(e=>console.warn('[Supabase] logQuery error:',e.message));
-  }
-  if(error){
-    // Code errored — retry code generation with same model
-    try{
-      const _fix=await _callGroq([{role:'system',content:codeSys},..._history.slice(-6),
-        {role:'assistant',content:step1},
-        {role:'user',content:'Code error: '+error+'. Fix it.'}],900);
-      const _c2=extractCode(_fix);
-      if(_c2){const _s2=sandboxExec(_c2);if(!_s2.error){result=_s2.result;error=null;}}
-    }catch(e){}
-    if(error){
-      loader.textContent='Could not execute query: '+error; loader.className='am ai err';
-      _history.pop(); document.getElementById('ap-send').disabled=false; return;
-    }
-  }
-
-  // ── STEP 3: Format result — Gemini Flash-Lite → Gemini Flash → Groq → raw ─────────
-  const _fmtPrompt=[
-    {role:'system',content:'You are a formatting assistant. Present the raw data result below in a clean, readable format.\nSTRICT RULES:\n1. Copy ALL customer names, invoice IDs, amounts and dates EXACTLY as they appear in the raw result. Do NOT change, replace or invent any names or numbers.\n2. Do NOT add data that is not in the raw result.\n3. Use Rs for currency amounts.\n4. Use markdown tables or bullet lists to improve readability.\n5. Add a summary line at the end with totals if present in the raw data.'},
-    {role:'user',content:'Question: '+q+'\n\nRaw result (copy this data exactly):\n'+result}
-  ];
-  let ans=null;
-
-  if(_geminiKey){
-    for(const m of [_MODELS.geminiFast,_MODELS.geminiMain]){
-      try{
-        loader.textContent='Formatting...';
-        ans=await _callGemini(m,_fmtPrompt,2000);
-        if(ans) break;
-      }catch(e){console.warn('[Gemini] '+m+' failed:',e.message);}
-    }
-  }
-  if(!ans&&_groqKey){
-    try{loader.textContent='Formatting...';ans=await _PROVIDERS.groq.call(_fmtPrompt,_groqKey,_MODELS.groqFast,2000);}
-    catch(e){console.warn('[Groq] formatting failed:',e.message);}
-  }
-
-  // Last resort: show raw result
-  if(!ans) ans=result;
-
-  loader.textContent=ans; loader.className='am ai';
-  _history.push({role:'assistant',content:ans});
-  if(_history.length>12)_history=_history.slice(-12);
-  document.getElementById('ap-send').disabled=false;
-}
-
 // ══════════════════════════════════════════════
 // INVENTORY VALUATION TABLE
 // ══════════════════════════════════════════════
@@ -3206,13 +3062,6 @@ function renderInventoryTable(){
 }
 
 
-window.addEventListener('beforeunload',()=>{
-  if(!_sbReady()||!_history.length) return;
-  const turns=_history.filter(m=>m.role==='user').map(m=>m.content.slice(0,60));
-  if(!turns.length) return;
-  const s='Session '+new Date().toLocaleDateString('en-IN')+': Asked: '+turns.slice(-3).join('; ');
-  saveSessionMemory(s,{}).catch(()=>{});
-});
 
 // ── Dark mode ─────────────────────────────────────────────
 function toggleDark(){
@@ -3306,101 +3155,415 @@ async function confirmSubLock(){
 }
 
 
+const _SYS_HEAD=()=>'You are a data analyst for GS Agencies, Pepsi distributor.\n\nSCHEMA:\n'+dataSchema()+'\n\nCONTEXT:\n'+buildSchemaBlock()+'\n';
+const _SYS_RULES='\n\nHELPERS AVAILABLE IN SCOPE (ALWAYS use these for receivables):\ngetPendingInvoices(custName|null) -> [{invoice_id,customer_name,date,billed,due}] correct tpLedger\ngetCustomerOutstanding(custName) -> {customer,total_outstanding,invoice_count}\ngetAllOutstanding() -> [{customer,outstanding}] sorted desc\ngetStockCoverDays(productName,days=30) -> {product,currentStock,dailyRate,coverDays}\ngetPurchaseRecommendation(targetDays,days=30) -> [{product,dailyRate,coverDays,boxesToBuy,estimatedCost}]\ngetLateCustomers(minDaysLate=30,minMonths=3) -> [{customer,monthCount,months}]\ngetExpiringStock(days=45,referenceDate=null) -> [{product_name,batch_id,expiry_date,purchased_qty,sold_qty,remaining_qty,unit_cost,total_cost,days_to_expiry}]\ngetExpiredStockWithRemaining() -> [{product_name,batch_id,expiry_date,remaining_qty,total_cost}]\nCRITICAL: For ANY expiry/expiring question ALWAYS use getExpiringStock() — NEVER query stock_out for expiry\n\nMANDATORY RULES:\n1. ALWAYS generate <execute_js>...return result;</execute_js> for ANY data question.\n2. NEVER answer data questions from memory or context — ALWAYS query DATA via code.\n3. Use getPendingInvoices() for ANY pending/unpaid invoice question — never recompute manually.\n4. custLocMap is pre-declared — do NOT redeclare it.\n5. Only plain text (no code) for greetings and message drafts.\n6. For ANY expiry/expiring/near-expiry question: use getExpiringStock(days,referenceDate). NEVER use stock_out for expiry — stock_out has sale expiry dates not batch-level remaining stock.\n7. getExpiringStock already deducts sold qty per batch — do NOT manually subtract or filter stock_out.';
+const _SYS_DEFAULT_EXAMPLES='\n\nEXAMPLES:\nQ: unpaid invoices Feb 2026\n<execute_js>\nconst p=getPendingInvoices(null).filter(r=>r.date&&r.date.startsWith(\'2026-02\'));\nif(!p.length) return \'No unpaid invoices for Feb 2026.\';\nconst total=p.reduce((s,r)=>s+r.due,0);\nreturn p.map(r=>r.date+\' | \'+r.invoice_id+\' | \'+r.customer_name+\' | Rs\'+r.due).join(\'\\n\')+\'\\nTotal: \'+p.length+\' invoices, Rs\'+total;\n</execute_js>\nQ: top products by revenue\n<execute_js>\nconst m={};DATA.stock_out.forEach(r=>{m[r.product_name]=(m[r.product_name]||0)+(+r.total_sale||0);});\nreturn Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([p,v])=>p+\': Rs\'+Math.round(v).toLocaleString(\'en-IN\')).join(\'\\n\');\n</execute_js>\n\nQ: gross profit margin by product for March 2026\n<execute_js>\n// Aggregate FIRST, then compute margin — never per-row\nconst rev={},cost={};\nDATA.stock_out.filter(r=>r.sale_date&&r.sale_date.startsWith(\'2026-03\')).forEach(r=>{\n  rev[r.product_name]=(rev[r.product_name]||0)+(+r.total_sale||0);\n  cost[r.product_name]=(cost[r.product_name]||0)+(+r.buying_rate_at_time||0);\n});\nreturn Object.keys(rev).filter(p=>rev[p]>0).map(p=>({\n  p,margin:Math.round((rev[p]-cost[p])/rev[p]*100*10)/10\n})).sort((a,b)=>b.margin-a.margin)\n.map(x=>x.p+\': \'+x.margin+\'%\').join(\'\\n\');\n</execute_js>\n\nQ: average collection period in days\n<execute_js>\nconst ss=DATA.sales_summary;\nconst payMap={};// reference_invoice -> earliest PAY date\nss.filter(r=>String(r.reference_invoice_id||\'\')\ .startsWith(\'PAY-\')&&r.reference_invoice&&r.sale_date)\n.forEach(r=>{const ref=r.reference_invoice;if(!payMap[ref]||r.sale_date<payMap[ref])payMap[ref]=r.sale_date;});\nconst diffs=ss.filter(r=>!String(r.reference_invoice_id||\'\')\ .startsWith(\'PAY-\')&&payMap[r.reference_invoice_id])\n.map(r=>(new Date(payMap[r.reference_invoice_id])-new Date(r.sale_date))/86400000)\n.filter(d=>d>=0&&d<365);\nif(!diffs.length)return\'No matching payment records found.\';\nreturn\'Average collection period: \'+Math.round(diffs.reduce((s,d)=>s+d,0)/diffs.length)+\' days (from \'+diffs.length+\' matched invoices)\';\n</execute_js>';
+const _FMT_SYS='You are a formatting assistant. Present the raw data result below in a clean, readable format.\nSTRICT RULES:\n1. Copy ALL customer names, invoice IDs, amounts and dates EXACTLY as they appear in the raw result. Do NOT change, replace or invent any names or numbers.\n2. Do NOT add data that is not in the raw result.\n3. Use Rs for currency amounts.\n4. Use markdown tables or bullet lists to improve readability.\n5. Add a summary line at the end with totals if present in the raw data.';
+
 // ════════════════════════════════════════════════════════════════
-// SUPABASE — AI memory layer (bot only, no BI/auth changes)
+// KNOWLEDGE BASE + RETRIEVAL (RAG) — no external database.
+//   • Approved examples + business rules live in  knowledge_base.json  (your GitHub repo)
+//   • Your own additions live in this browser (localStorage) until you export them
+//   • Retrieval = keyword search (BM25) + meaning search (Gemini embeddings) fused with RRF.
+//     If no Gemini key / offline, it silently falls back to keyword-only.
+//   • Customer / product names in the question are matched against the real data
+//     (typo-tolerant) so the model always gets the exact spelling.
 // ════════════════════════════════════════════════════════════════
-let _SB_URL='',_SB_KEY='',_SB_SESSION='';
-let _sbKnowledgeCache=[],_sbCacheLoaded=false;
-function _sbReady(){return!!(_SB_URL&&_SB_KEY);}
+const GITHUB_BASE=GITHUB_RAW.replace(/[^\/]+$/,'');
+const _EMB={model:'gemini-embedding-001',dim:768,batch:50};
+const _RAGCFG={cosMin:0.60,minTokenHits:2,topK:3,glossaryK:3,rrfK:60};
 
-function saveSupabaseCreds(){
-  const u=document.getElementById('sb-url')?.value.trim()||'';
-  const k=(document.getElementById('sb-key')?.value||'').replace(/[^\x20-\x7E]/g,'').trim();
-  if(u){localStorage.setItem('gs_sb_url',u);_SB_URL=u;}
-  if(k){localStorage.setItem('gs_sb_key',k);_SB_KEY=k;}
-  _updateSbStatus();
-  if(_sbReady()){_sbCacheLoaded=false;setTimeout(()=>_preloadKnowledge().catch(()=>{}),200);}
-}
-function loadSupabaseCreds(){
-  _SB_URL=localStorage.getItem('gs_sb_url')||'';
-  _SB_KEY=(localStorage.getItem('gs_sb_key')||'').replace(/[^\x20-\x7E]/g,'').trim();
-  const uEl=document.getElementById('sb-url');
-  const kEl=document.getElementById('sb-key');
-  if(uEl&&_SB_URL)uEl.value=_SB_URL;
-  if(kEl&&_SB_KEY)kEl.value=_SB_KEY;
-  _updateSbStatus();
-}
-function _updateSbStatus(){
-  const el=document.getElementById('sb-status');if(!el)return;
-  const rawKey=localStorage.getItem('gs_sb_key')||'';
-  const badChars=[...rawKey].some(c=>c.charCodeAt(0)>127);
-  if(badChars){
-    el.textContent='\u26A0\uFE0F Key has invalid characters \u2014 re-copy from Supabase and paste again';
-    el.style.color='var(--red)';return;
+function _lsGet(k,def){try{const v=localStorage.getItem(k);return v?JSON.parse(v):def;}catch(e){return def;}}
+function _lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}catch(e){console.warn('[storage] could not save',k,e.message);return false;}}
+function _hesc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// Fetch a JSON file that lives next to dashboard_data.json in the repo
+async function _fetchRepoJson(name){
+  for(const url of [GITHUB_BASE+name+'?_='+Date.now(),'./'+name+'?_='+Date.now()]){
+    try{const r=await fetch(url,{cache:'no-store'});if(r.ok)return await r.json();}catch(e){}
   }
-  if(_sbReady()){el.textContent='\u2705 Connected \u2014 AI memory active';el.style.color='var(--green)';}
-  else{el.textContent='Not connected \u2014 enter URL and anon key above';el.style.color='var(--dim)';}
+  return null;
 }
 
-async function _sbInsert(table,row){
-  if(!_sbReady())return null;
+// ── Text processing ─────────────────────────────────────────────
+// Light stemming + a small synonym map (English / Hinglish / Marathi) so that
+// "baaki", "pending", "dues" and "थकबाकी" all land on the same keyword.
+const _STOP=new Set(('a an the is are was were be been of to in on at for from by with and or not no do does did how what which who whom '+
+  'whose when where why show list give tell me my our us we i you it its this that these those please can could would should have has had get got '+
+  'all any each every there their them than then so if as about also into over per vs kitna kitne kitni kya hai hain ka ki ke ko se me mein par aur ya '+
+  'mera mere meri hamara mala kiti kay aahe ahe cha chi che la na').split(' '));
+const _SYN={
+  baaki:'outstanding',baki:'outstanding',pending:'outstanding',unpaid:'outstanding',due:'outstanding',dues:'outstanding',receivable:'outstanding',
+  receivables:'outstanding',udhar:'outstanding',udhari:'outstanding',owe:'outstanding',owes:'outstanding',owed:'outstanding',balance:'outstanding',
+  thakbaki:'outstanding',thakbaaki:'outstanding','थकबाकी':'outstanding','बाकी':'outstanding','उधार':'outstanding',
+  revenue:'sale',sales:'sale',sale:'sale',turnover:'sale',bikri:'sale',vikri:'sale','विक्री':'sale','बिक्री':'sale',selling:'sale',sold:'sale',
+  profit:'profit',margin:'profit',gp:'profit',nafa:'profit',naafa:'profit',gross:'profit','फायदा':'profit','नफा':'profit',
+  inventory:'stock',maal:'stock',saath:'stock','साठा':'stock','माल':'stock',
+  expiring:'expiry',expire:'expiry',expired:'expiry',expires:'expiry',
+  party:'customer',parties:'customer',client:'customer',clients:'customer',grahak:'customer','ग्राहक':'customer',
+  monthly:'month',mahina:'month',mahine:'month','महिना':'month','महिन्यात':'month',
+  best:'top',highest:'top',biggest:'top',largest:'top',most:'top',jyada:'top',
+  expenses:'expense',kharcha:'expense',kharch:'expense',kharche:'expense','खर्च':'expense',
+  paid:'payment',payments:'payment',collection:'payment',collections:'payment',collected:'payment',received:'payment',vasuli:'payment',vasul:'payment','वसुली':'payment',
+  invoices:'invoice',bill:'invoice',bills:'invoice',late:'late',slow:'late',delay:'late',delayed:'late',
+  lowest:'low',least:'low',running:'low',
+  buy:'purchase',purchase:'purchase',restock:'purchase',reorder:'purchase'
+};
+function _tok(s){
+  const raw=String(s||'').toLowerCase().normalize('NFKC').match(/[\p{L}\p{M}\p{N}]+/gu)||[];
+  const out=[];
+  for(let t of raw){
+    if(_STOP.has(t))continue;
+    if(_SYN[t]){out.push(_SYN[t]);continue;}
+    if(t.length>3&&t.endsWith('s')&&!t.endsWith('ss'))t=t.slice(0,-1);
+    if(_SYN[t])t=_SYN[t];
+    if(t.length>1||/\d/.test(t))out.push(t);
+  }
+  return out;
+}
+function _hash(s){let h=0x811c9dc5;const t=_EMB.model+'|'+_EMB.dim+'|'+s;for(let i=0;i<t.length;i++){h^=t.charCodeAt(i);h=Math.imul(h,0x01000193);}return(h>>>0).toString(16);}
+
+// ── BM25 (keyword search) ───────────────────────────────────────
+function _bm25Build(docs){
+  const ix={docs,N:docs.length,df:new Map(),tf:[]};
+  ix.avg=docs.reduce((s,d)=>s+d.length,0)/Math.max(1,ix.N)||1;
+  docs.forEach(d=>{new Set(d).forEach(t=>ix.df.set(t,(ix.df.get(t)||0)+1));const m=new Map();d.forEach(t=>m.set(t,(m.get(t)||0)+1));ix.tf.push(m);});
+  ix.idf=t=>{const n=ix.df.get(t)||0;return Math.log(1+(ix.N-n+0.5)/(n+0.5));};
+  return ix;
+}
+function _bm25Score(ix,qt,i){
+  let s=0,hits=0;const dl=ix.docs[i].length;
+  for(const t of qt){const f=ix.tf[i].get(t);if(!f)continue;hits++;s+=ix.idf(t)*(f*2.2)/(f+1.2*(0.25+0.75*dl/ix.avg));}
+  return{s,hits};
+}
+
+// ── Vectors (meaning search) ────────────────────────────────────
+const _vec=new Map();                       // text-hash → Float32Array
+function _norm(v){let n=0;for(let i=0;i<v.length;i++)n+=v[i]*v[i];n=Math.sqrt(n)||1;const o=new Float32Array(v.length);for(let i=0;i<v.length;i++)o[i]=v[i]/n;return o;}
+function _dot(a,b){let s=0;const n=Math.min(a.length,b.length);for(let i=0;i<n;i++)s+=a[i]*b[i];return s;}
+let _embFailUntil=0;
+async function _embedTexts(texts,taskType,key){
+  const out=[];
+  for(let i=0;i<texts.length;i+=_EMB.batch){
+    const chunk=texts.slice(i,i+_EMB.batch);
+    const body={requests:chunk.map(t=>({model:'models/'+_EMB.model,content:{parts:[{text:t}]},taskType,outputDimensionality:_EMB.dim}))};
+    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+_EMB.model+':batchEmbedContents?key='+key,
+      {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok)throw await _apiErr(r);
+    const j=await r.json();
+    (j.embeddings||[]).forEach(e=>out.push(_norm(e.values)));
+  }
+  if(out.length!==texts.length)throw new Error('embedding count mismatch');
+  return out;
+}
+const _qvCache=new Map();
+async function _embedQuery(q){
+  const key=_keyFor('gemini');if(!key||Date.now()<_embFailUntil)return null;
+  if(_qvCache.has(q))return _qvCache.get(q);
   try{
-    const ctrl=new AbortController();
-    const tid=setTimeout(()=>ctrl.abort(),4000);
-    const r=await fetch(_SB_URL+'/rest/v1/'+table,{method:'POST',
-      headers:{'apikey':_SB_KEY,'Authorization':'Bearer '+_SB_KEY,
-        'Content-Type':'application/json','Prefer':'return=representation'},
-      body:JSON.stringify(row),signal:ctrl.signal});
-    clearTimeout(tid);
-    if(!r.ok){
-      const e=await r.json().catch(()=>({}));
-      console.warn('[Supabase] INSERT failed:',r.status,JSON.stringify(e).slice(0,120));
-      return null;
+    const v=(await Promise.race([_embedTexts([q],'RETRIEVAL_QUERY',key),new Promise((_,rej)=>setTimeout(()=>rej(new Error('embedding timeout')),7000))]))[0];
+    _qvCache.set(q,v);if(_qvCache.size>60)_qvCache.delete(_qvCache.keys().next().value);
+    return v;
+  }catch(e){console.warn('[RAG] query embedding failed → keyword-only:',e.message);_embFailUntil=Date.now()+60000;return null;}
+}
+
+// ── Knowledge base: load, merge, index ──────────────────────────
+let KB={patterns:[],glossary:[]},_kbLoaded=false,_kbLoading=null,_kbIx=null,_kbRepoCount=0;
+function _patTexts(p){return[p.question,...(p.variants||[])].filter(Boolean);}
+function _gloTexts(g){return[g.title+': '+g.text];}
+function _kbItemVecs(texts){return texts.map(t=>_vec.get(_hash(t))).filter(Boolean);}
+
+function _ingestEmb(item){
+  const e=item&&item.emb;if(!e||e.model!==_EMB.model||e.dim!==_EMB.dim||!e.h||!e.v)return;
+  e.h.forEach((h,i)=>{if(e.v[i])_vec.set(h,Float32Array.from(e.v[i]));});
+}
+function _persistVecs(){
+  // keep only vectors that belong to current KB texts (keeps storage small)
+  const keep={};
+  [...KB.patterns.flatMap(_patTexts),...KB.glossary.flatMap(_gloTexts)].forEach(t=>{const h=_hash(t);const v=_vec.get(h);if(v)keep[h]=Array.from(v,x=>Math.round(x*1e4)/1e4);});
+  _lsSet('gs_kb_emb',{model:_EMB.model,dim:_EMB.dim,m:keep});
+}
+function _kbBuildIndex(){
+  _kbIx={
+    pat:_bm25Build(KB.patterns.map(p=>_tok(_patTexts(p).concat(p.tags||[]).join(' ')))),
+    glo:_bm25Build(KB.glossary.map(g=>_tok([g.title,...(g.keywords||[])].join(' '))))   // title + keywords only: long rule text matches too loosely
+  };
+}
+async function kbLoad(force){
+  if(_kbLoaded&&!force)return KB;
+  if(_kbLoading&&!force)return _kbLoading;
+  _kbLoading=(async()=>{
+    let repo=await _fetchRepoJson('knowledge_base.json');
+    if(repo)_lsSet('gs_kb_cache',repo);else repo=_lsGet('gs_kb_cache',null);
+    if(!repo)repo={patterns:[],glossary:[]};
+    const loc=_lsGet('gs_kb_local',{added:[],hidden:[]});
+    const hidden=new Set(loc.hidden||[]);
+    const repoPats=(repo.patterns||[]).filter(p=>p&&p.id&&p.code).map(p=>({...p,source:'repo'}));
+    const ids=new Set(repoPats.map(p=>p.id));
+    _kbRepoCount=repoPats.length;
+    KB={
+      patterns:[...repoPats,...(loc.added||[]).filter(p=>!ids.has(p.id)).map(p=>({...p,source:'local'}))].filter(p=>!hidden.has(p.id)),
+      glossary:(repo.glossary||[]).filter(g=>g&&g.id&&g.text&&!hidden.has(g.id)),
+      meta:repo.meta||{}
+    };
+    _vec.clear();
+    const cache=_lsGet('gs_kb_emb',null);
+    if(cache&&cache.model===_EMB.model&&cache.dim===_EMB.dim)Object.entries(cache.m||{}).forEach(([h,v])=>_vec.set(h,Float32Array.from(v)));
+    [...KB.patterns,...KB.glossary].forEach(_ingestEmb);
+    _kbBuildIndex();_kbLoaded=true;
+    return KB;
+  })();
+  try{return await _kbLoading;}finally{_kbLoading=null;}
+}
+function kbMissingTexts(){
+  const all=[...KB.patterns.flatMap(_patTexts),...KB.glossary.flatMap(_gloTexts)];
+  return[...new Set(all)].filter(t=>!_vec.has(_hash(t)));
+}
+async function kbEmbedMissing(status){
+  const key=_keyFor('gemini');
+  const miss=kbMissingTexts();
+  if(!miss.length)return{done:0,missing:0};
+  if(!key)return{done:0,missing:miss.length,reason:'Add a Gemini key to compute embeddings'};
+  const vecs=await _embedTexts(miss,'RETRIEVAL_DOCUMENT',key);
+  miss.forEach((t,i)=>_vec.set(_hash(t),vecs[i]));
+  _persistVecs();
+  if(status)status(miss.length);
+  return{done:miss.length,missing:0};
+}
+let _kbAutoEmbedded=false;
+async function kbInit(){
+  try{
+    _restoreVault();
+    await kbLoad();
+    if(!_kbAutoEmbedded&&_keyFor('gemini')&&kbMissingTexts().length){_kbAutoEmbedded=true;await kbEmbedMissing();}
+  }catch(e){console.warn('[KB] init:',e.message);}
+}
+
+// ── Entity matching: user's words → exact customer / product names ──
+const _ENT_ALIAS=[[/\b7\s*up\b/g,'7up']];                        // spelling variants seen in product names
+const _PROD_NOISE=/^(pet|rgp|can|prc|non|promo|zero|rs\d+|pet\d+|\d{1,2})$/;   // pack counts, prices, packaging words
+function _entTok(s){
+  s=String(s||'').toLowerCase().normalize('NFKC');
+  _ENT_ALIAS.forEach(([a,b])=>{s=s.replace(a,b);});
+  s=s.replace(/(\d)\s*(ml|ltr|litre|liter|lt|l)\b/g,(m,n,u)=>n+(u==='ml'?'ml':'l'));
+  return(s.match(/[\p{L}\p{M}\p{N}]+(?:\.[\p{L}\p{N}]+)*/gu)||[]).filter(t=>(t.length>1||/\d/.test(t))&&!_STOP.has(t));
+}
+function _ed1(a,b){ // is edit distance ≤ 1 ?
+  if(a===b)return true;const la=a.length,lb=b.length;if(Math.abs(la-lb)>1)return false;
+  let i=0,j=0,e=0;
+  while(i<la&&j<lb){
+    if(a[i]===b[j]){i++;j++;continue;}
+    if(++e>1)return false;
+    if(la===lb){i++;j++;}else if(la>lb)i++;else j++;
+  }
+  return e+(la-i)+(lb-j)<=1;
+}
+const _QWORDS=new Set('total amount month months customer customers product products invoice invoices outstanding revenue sales stock profit pending payment payments expense expenses margin report summary where latest recent'.split(' '));
+let _entCache=null;
+function _entIndex(){
+  const sig=(DATA&&DATA.exported_at)+'|'+((DATA&&DATA.customers)||[]).length+'|'+((DATA&&DATA.products)||[]).length;
+  if(_entCache&&_entCache.sig===sig)return _entCache;
+  const loc={};(DATA.customers||[]).forEach(c=>{loc[c.customer_name]=c.location||'';});
+  const cn=[...new Set([...(DATA.customers||[]).map(c=>c.customer_name),...(DATA.sales_summary||[]).map(r=>r.customer_name)].filter(Boolean))];
+  const pn=[...new Set((DATA.products||[]).map(p=>p.product_name).filter(Boolean))];
+  const mk=(names,isProd)=>{
+    const docs=names.map(n=>{const t=_entTok(n);return isProd?t.filter(x=>!_PROD_NOISE.test(x)):t;}),ix=_bm25Build(docs);
+    const self=docs.map((d,i)=>_bm25Score(ix,[...new Set(d)],i).s||1e-9);
+    return{names,ix,self,vocab:[...ix.df.keys()]};
+  };
+  _entCache={sig,loc,cust:mk(cn,false),prod:mk(pn,true)};
+  return _entCache;
+}
+function _entFind(set,q,limit,isProd){
+  let qt=[...new Set(_entTok(q))];
+  const extra=[];
+  qt.forEach(t=>{if(t.length>=5&&!set.ix.df.has(t)&&!_QWORDS.has(t)){const near=set.vocab.filter(v=>_ed1(t,v)).slice(0,2);extra.push(...near);}});
+  qt=[...new Set([...qt,...extra])];
+  if(!qt.length)return[];
+  const norm=x=>' '+String(x).toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}.]+/gu,' ').trim()+' ';
+  const low=norm(q);
+  const need=isProd?(qt.some(t=>/\d/.test(t))?0.6:0.85):0.6;   // a bare brand name is too vague to pin to one product
+  const res=[];
+  for(let i=0;i<set.names.length;i++){
+    const {s,hits}=_bm25Score(set.ix,qt,i);
+    let ratio=hits?s/set.self[i]:0;
+    if(low.includes(norm(set.names[i])))ratio=Math.max(ratio,1);
+    if(ratio>=need)res.push({name:set.names[i],ratio});
+  }
+  res.sort((a,b)=>b.ratio-a.ratio);
+  // products: if one is a (near-)exact match, drop the look-alikes (other sizes of the same brand)
+  if(isProd&&res.length&&res[0].ratio>=0.95)return res.filter(r=>r.ratio>=0.9).slice(0,limit);
+  return res.slice(0,limit);
+}
+function ragEntities(q){
+  if(!DATA)return{customers:[],products:[]};
+  try{
+    const E=_entIndex();
+    const customers=_entFind(E.cust,q,4,false).map(c=>({...c,location:E.loc[c.name]||''}));
+    const products=_entFind(E.prod,q,5,true);
+    return{customers,products};
+  }catch(e){console.warn('[RAG] entity match failed',e);return{customers:[],products:[]};}
+}
+
+// ── Retrieval: keyword + meaning, fused with Reciprocal Rank Fusion ──
+function _hybridRank(items,ix,qt,qv,vecsOf,k){
+  const lex=[],sem=[];
+  items.forEach((it,i)=>{
+    const {s,hits}=_bm25Score(ix,qt,i);
+    if(s>0&&(hits>=_RAGCFG.minTokenHits||(qt.length<=2&&hits>=1)))lex.push({i,s,hits});
+    if(qv){const vs=vecsOf(it);if(vs.length){const c=Math.max(...vs.map(v=>_dot(qv,v)));if(c>=_RAGCFG.cosMin)sem.push({i,c});}}
+  });
+  lex.sort((a,b)=>b.s-a.s);sem.sort((a,b)=>b.c-a.c);
+  const fused=new Map();
+  lex.forEach((r,rank)=>{const o=fused.get(r.i)||{i:r.i,score:0};o.score+=1/(_RAGCFG.rrfK+rank+1);o.lex=r.s;o.hits=r.hits;fused.set(r.i,o);});
+  sem.forEach((r,rank)=>{const o=fused.get(r.i)||{i:r.i,score:0};o.score+=1/(_RAGCFG.rrfK+rank+1);o.cos=r.c;fused.set(r.i,o);});
+  return[...fused.values()].sort((a,b)=>b.score-a.score).slice(0,k).map(o=>({item:items[o.i],score:o.score,lex:o.lex,hits:o.hits,cos:o.cos}));
+}
+async function ragRetrieve(q,opts){
+  opts=opts||{};
+  await kbLoad();
+  // Names of customers/products are not the *intent* — drop them from the keyword query so
+  // "Omkar Hotel ka kitna baaki hai" is searched as "outstanding", not diluted by the name.
+  const ent=ragEntities(q);
+  const entToks=new Set([...ent.customers,...ent.products].flatMap(e=>_tok(e.name)));
+  const qt=[...new Set(_tok(q))].filter(t=>!entToks.has(t));
+  const qv=(opts.keywordOnly||!qt.length)?null:await _embedQuery(q);
+  const examples=_hybridRank(KB.patterns,_kbIx.pat,qt,qv,p=>_kbItemVecs(_patTexts(p)),_RAGCFG.topK);
+  const rawWords=new Set(String(q).toLowerCase().normalize('NFKC').match(/[\p{L}\p{M}\p{N}]+/gu)||[]);
+  const rules=_hybridRank(KB.glossary,_kbIx.glo,qt,qv,g=>_kbItemVecs(_gloTexts(g)),_RAGCFG.glossaryK).map(r=>r.item)
+    .filter(g=>!g.literal||(g.keywords||[]).some(k=>rawWords.has(k)));   // "literal" rules (Hindi/Marathi glossary) only when those words are really used
+  return{examples,rules,entities:ent,mode:qv?'hybrid':'keyword'};
+}
+function _ctxBlock(ctx){
+  let s='';
+  const c=ctx.entities.customers,p=ctx.entities.products;
+  if(c.length||p.length){
+    s+='\n\nENTITY MATCHES — the user\'s words resolved against your real data. Use these EXACT spellings in code (never invent or re-spell names). If several names look like the same business, include all of them:';
+    c.forEach(x=>{s+='\n  customer: "'+x.name+'"'+(x.location?' ('+x.location+')':'');});
+    p.forEach(x=>{s+='\n  product: "'+x.name+'"';});
+  }
+  if(ctx.rules.length)s+='\n\nBUSINESS RULES relevant to this question:\n'+ctx.rules.map(r=>'- '+r.title+': '+r.text).join('\n');
+  if(ctx.examples.length)s+='\n\nVERIFIED EXAMPLES (tested on this exact data — adapt names, dates and limits to the question):\n'
+    +ctx.examples.map(e=>'Q: '+e.item.question+'\n<execute_js>\n'+e.item.code+'\n</execute_js>').join('\n\n');
+  return s;
+}
+
+// ── The chatbot pipeline (used by the chat panel AND the test runner) ──
+//   retrieve → write code → run code → verify → format answer
+async function runPipeline(q,hist,status,opts){
+  status=status||(()=>{});opts=opts||{};
+  const gKey=_keyFor('gemini'),qKey=_keyFor('groq');
+  if(!gKey&&!qKey)return{error:'Add a Groq or Gemini API key first.'};
+  const t0=Date.now();
+  status('Searching knowledge base...');
+  let ctx={examples:[],rules:[],entities:{customers:[],products:[]},mode:'none'};
+  try{ctx=await ragRetrieve(q,{keywordOnly:opts.keywordOnly});}catch(e){console.warn('[RAG] retrieval failed:',e);}
+  const codeSys=_SYS_HEAD()+_SYS_RULES+_ctxBlock(ctx)+(ctx.examples.length?'':_SYS_DEFAULT_EXAMPLES);
+  const callCode=async msgs=>{
+    let gErr='';
+    if(qKey){
+      try{status('Groq → generating code...');return await _callGroqChain(msgs,900);}
+      catch(e){gErr=e.message;if(!gKey)throw new Error('Groq failed: '+e.message+' (no Gemini key saved as backup)');}
     }
-    const d=await r.json();return Array.isArray(d)?d[0]:d;
-  }catch(e){return null;}
-}
-async function _sbSelect(table,params){
-  if(!_sbReady())return[];
-  try{
-    const ctrl=new AbortController();
-    const tid=setTimeout(()=>ctrl.abort(),4000);
-    const r=await fetch(_SB_URL+'/rest/v1/'+table+'?'+(params||''),{
-      headers:{'apikey':_SB_KEY,'Authorization':'Bearer '+_SB_KEY},
-      signal:ctrl.signal});
-    clearTimeout(tid);
-    if(!r.ok)return[];return await r.json();
-  }catch(e){return[];}
-}
-async function _sbUpdate(table,id,updates){
-  if(!_sbReady())return false;
-  try{
-    const ctrl=new AbortController();
-    const tid=setTimeout(()=>ctrl.abort(),4000);
-    const r=await fetch(_SB_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'PATCH',
-      headers:{'apikey':_SB_KEY,'Authorization':'Bearer '+_SB_KEY,'Content-Type':'application/json'},
-      body:JSON.stringify(updates),signal:ctrl.signal});
-    clearTimeout(tid);return r.ok;
-  }catch(e){return false;}
-}
+    status(qKey?'Groq unavailable — trying Gemini...':'Gemini → generating code...');
+    try{return await _callGeminiKey(_MODELS.geminiMain,msgs,900);}
+    catch(e){throw new Error('All code-generation models failed. '+(gErr?'Groq: '+gErr+' · ':'')+'Gemini: '+e.message);}
+  };
 
-function _getSessionId(){
-  if(!_SB_SESSION){
-    _SB_SESSION=sessionStorage.getItem('gs_session_id');
-    if(!_SB_SESSION){
-      _SB_SESSION='sess_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
-      sessionStorage.setItem('gs_session_id',_SB_SESSION);
+  // STEP 1 — write code
+  const codePrompt=[{role:'system',content:codeSys},...hist];
+  let step1;
+  try{step1=await callCode(codePrompt);}catch(e){return{error:e.message,retrieved:ctx};}
+  let code=extractCode(step1);
+  if(!code){
+    const isDataQ=/(invoice|pending|unpaid|revenue|sale|customer|stock|outstanding|product|location|collect|payment)/i.test(q);
+    if(isDataQ)return{error:'Model answered without executing code. Please rephrase or check your API key.',retrieved:ctx};
+    return{conversational:true,answer:step1,retrieved:ctx};
+  }
+
+  // STEP 2 — run code in the browser, verify; one automatic repair attempt on error
+  status('Running query...');
+  let {result,error}=sandboxExec(code);
+  if(error){
+    try{
+      const fix=await callCode([{role:'system',content:codeSys},...hist,{role:'assistant',content:step1},{role:'user',content:'Code error: '+error+'. Fix it.'}]);
+      const c2=extractCode(fix);
+      if(c2){const s2=sandboxExec(c2);if(!s2.error){result=s2.result;error=null;code=c2;}}
+    }catch(e){}
+    if(error)return{error:'Could not execute query: '+error,code,retrieved:ctx};
+  }
+  const fake=(/\b202[0-3]-\d{2}-\d{2}\b/.test(result))||(/\bINV0{1,3}\d{1,3}\b/.test(result))||(/John Smith|Jane Doe|Peter Jones|Alpha Corp|Beta Ltd|Gamma Inc|ABC Corp|XYZ Ltd|PQR Inc|Acme Corp|Test Corp/i.test(result));
+  if(fake)return{error:'The model returned example data instead of your actual data. Please rephrase and try again.',code,result,retrieved:ctx};
+  const prov=_validateProvenance(result);
+  if(!prov.valid)console.warn('[Verify] provenance warnings:',prov.warnings);
+  if(opts.log!==false)qlogAdd({question:q,code,result,provenance:prov.valid,ctxMode:ctx.mode});
+
+  // STEP 3 — present the result (Gemini Flash-Lite → Flash → Groq → raw)
+  const fmtPrompt=[
+    {role:'system',content:_FMT_SYS},
+    {role:'user',content:'Question: '+q+'\n\nRaw result (copy this data exactly):\n'+result}
+  ];
+  let ans=null;
+  if(gKey){
+    for(const m of [_MODELS.geminiFast,_MODELS.geminiMain]){
+      try{status('Formatting...');ans=await _callGeminiKey(m,fmtPrompt,2000);if(ans)break;}catch(e){console.warn('[Gemini] '+m+' failed:',e.message);}
     }
   }
-  return _SB_SESSION;
+  if(!ans&&qKey){
+    try{status('Formatting...');ans=await _PROVIDERS.groq.call(fmtPrompt,qKey,_MODELS.groqFast,2000);}catch(e){console.warn('[Groq] formatting failed:',e.message);}
+  }
+  if(!ans)ans=result;
+  return{ok:true,code,result,answer:ans,retrieved:ctx,ms:Date.now()-t0,provValid:prov.valid};
 }
-function _extractKeywords(text){
-  const stop=new Set(['what','which','when','where','show','list','find',
-    'tell','give','does','have','last','more','from','that','this','with',
-    'than','most','each','also','into','over','been','were','their']);
-  return[...new Set(text.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
-    .filter(w=>w.length>3&&!stop.has(w)))].slice(0,12);
+async function _callGeminiKey(model,msgs,maxTok){return _PROVIDERS.gemini.call(msgs,_keyFor('gemini'),model,maxTok);}
+async function _callGroqChain(msgs,maxTok){
+  const pref=(_currentProvider==='groq'?_getModel():_MODELS.groqMain);
+  const chain=[pref,..._PROVIDERS.groq.models.map(m=>m.id).filter(m=>m!==pref)];
+  let lastErr;
+  for(const m of chain){
+    try{return await _PROVIDERS.groq.call(msgs,_keyFor('groq'),m,maxTok);}catch(e){lastErr=e;console.warn('[Groq] '+m+' failed:',e.message);}
+  }
+  throw lastErr;
 }
+
+async function ask(){
+  const inp=document.getElementById('ap-input');const q=inp.value.trim();if(!q)return;
+  if(!_getKey()){_msg('ai','Please add your '+_prov().keyLabel+' above first.','err');return;}
+  if(!DATA){_msg('ai','No data loaded. Click Refresh first.','err');return;}
+  inp.value='';document.getElementById('ap-send').disabled=true;
+  _msg('user',q);const loader=_msg('ai','Thinking...','loading');
+  _history.push({role:'user',content:q});
+  const out=await runPipeline(q,_history.slice(-6),t=>{loader.textContent=t;});
+  document.getElementById('ap-send').disabled=false;
+  if(out.error){loader.textContent=out.error;loader.className='am ai err';_history.pop();return;}
+  loader.textContent=out.answer;loader.className='am ai';
+  if(out.retrieved&&(out.retrieved.examples.length||out.retrieved.rules.length)){
+    loader.title='Used '+out.retrieved.examples.length+' verified example(s), '+out.retrieved.rules.length+' rule(s) · search: '+out.retrieved.mode;
+  }
+  _history.push({role:'assistant',content:out.answer});
+  if(_history.length>12)_history=_history.slice(-12);
+}
+
+// ── Local query log, alert history (replaces the old Supabase tables) ──
+function qlogAdd(e){
+  const list=_lsGet('gs_qlog',[]);
+  list.unshift({id:'q'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),ts:new Date().toISOString(),
+    question:e.question,code:(e.code||'').slice(0,4000),result:(e.result||'').slice(0,1500),prov:!!e.provenance,mode:e.ctxMode||'',status:'new'});
+  _lsSet('gs_qlog',list.slice(0,150));
+}
+async function logAlert(type,message,value,threshold,product,customer){
+  const day=new Date().toISOString().slice(0,10),k=type+'|'+(product||'')+'|'+(customer||'');
+  const cut=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+  let list=_lsGet('gs_alerts',[]).filter(a=>a.d>=cut);
+  if(!list.some(a=>a.k===k&&a.d===day))list.push({k,d:day});
+  _lsSet('gs_alerts',list);
+}
+async function isAlertPersistent(type,product,customer,days){
+  const k=type+'|'+(product||'')+'|'+(customer||''),since=new Date(Date.now()-(days||7)*86400000).toISOString().slice(0,10),today=new Date().toISOString().slice(0,10);
+  return new Set(_lsGet('gs_alerts',[]).filter(a=>a.k===k&&a.d>=since&&a.d<today).map(a=>a.d)).size>=2;
+}
+
+// ── _validateProvenance (unchanged logic) ──
 function _validateProvenance(result){
   if(!DATA||!result)return{valid:true,warnings:[]};
   const cSet=new Set((DATA.customers||[]).map(c=>c.customer_name));
@@ -3408,188 +3571,252 @@ function _validateProvenance(result){
   const w=[];
   if(/\b202[0-3]-\d{2}-\d{2}\b/.test(result))w.push('Pre-2024 dates');
   if(/\bINV0{1,3}\d{1,3}\b/.test(result))w.push('Fake invoice IDs');
-  const skip=new Set(['Total','Date','Invoice','Amount','Product','Customer',
-    'January','February','March','April','May','June','July','August',
-    'September','October','November','December','Summary','Result']);
+  const skip=new Set(['Total','Date','Invoice','Amount','Product','Customer','January','February','March','April','May','June','July','August','September','October','November','December','Summary','Result']);
   const phrases=result.match(/[A-Z][a-z]+(?:\s[A-Z][a-z]+){1,3}/g)||[];
   const unk=phrases.filter(p=>!cSet.has(p)&&!pSet.has(p)&&!skip.has(p));
   if(unk.length>3)w.push(unk.length+' unrecognised names: '+unk.slice(0,3).join(', '));
   return{valid:w.length===0,warnings:w};
 }
 
-// ── In-memory knowledge cache — preloaded once, matched sync ────
-async function _preloadKnowledge(){
-  if(!_sbReady()||_sbCacheLoaded)return;
-  try{
-    const rows=await _sbSelect('knowledge_patterns','order=use_count.desc&limit=50');
-    if(Array.isArray(rows)){_sbKnowledgeCache=rows;_sbCacheLoaded=true;}
-  }catch(e){}
-}
-function _matchKnowledge(question){
-  if(!_sbKnowledgeCache.length)return[];
-  const kw=_extractKeywords(question);if(!kw.length)return[];
-  const scored=_sbKnowledgeCache.map(r=>({
-    ...r,score:(r.keywords||[]).filter(k=>kw.includes(k)).length
-  })).filter(r=>r.score>0).sort((a,b)=>b.score-a.score);
-  return scored.slice(0,2);
-}
-
-async function retrieveKnowledge(question){return _matchKnowledge(question);}
-
-async function logQuery({question,code,result,success,model,provenanceValid}){
-  if(!_sbReady()){console.log('[Supabase] logQuery skipped — not connected');return null;}
-  console.log('[Supabase] logQuery firing — success:'+success+' q:'+question.slice(0,40));
-  return await _sbInsert('query_log',{
-    question,generated_code:code||null,raw_result:(result||'').slice(0,2000),
-    success:!!success,provenance_valid:!!provenanceValid,
-    model_used:model||'unknown',session_id:_getSessionId(),
-    keywords:_extractKeywords(question)
-  });
-}
-async function promoteToKnowledge(queryLogId,question,code,resultSummary){
-  if(!_sbReady())return false;
-  const ins=await _sbInsert('knowledge_patterns',{
-    question,keywords:_extractKeywords(question),working_code:code,
-    result_summary:(resultSummary||'').slice(0,500),promoted_from:queryLogId
-  });
-  if(ins&&queryLogId)
-    _sbUpdate('query_log',queryLogId,{promoted:true,promoted_at:new Date().toISOString()});
-  return!!ins;
-}
-async function loadSessionMemory(){
-  if(!_sbReady())return'';
-  const rows=await _sbSelect('session_memory','order=created_at.desc&limit=3');
-  return(rows||[]).map(r=>r.summary).filter(Boolean).join('\n');
-}
-async function saveSessionMemory(summary,keyFacts){
-  if(!_sbReady()||!summary)return;
-  await _sbInsert('session_memory',{session_id:_getSessionId(),
-    summary:summary.slice(0,1000),key_facts:keyFacts||{}});
-}
-async function logAlert(type,message,value,threshold,product,customer){
-  if(!_sbReady())return;
-  await _sbInsert('alert_history',{alert_type:type,
-    message:(message||'').slice(0,500),value:value||null,threshold:threshold||null,
-    product_name:product||null,customer:customer||null});
-}
-async function isAlertPersistent(type,product,customer,days){
-  if(!_sbReady())return false;
-  const since=new Date(Date.now()-(days||7)*86400000).toISOString();
-  let f='alert_type=eq.'+type+'&created_at=gte.'+since;
-  if(product)f+='&product_name=eq.'+encodeURIComponent(product);
-  if(customer)f+='&customer=eq.'+encodeURIComponent(customer);
-  const rows=await _sbSelect('alert_history',f+'&limit=3');
-  return(rows||[]).length>=2;
-}
-async function getCurationQueue(limit){
-  if(!_sbReady())return[];
-  // Show ALL successful unpromoted queries — human review is the final filter
-  return await _sbSelect('query_log',
-    'success=eq.true&promoted=eq.false'
-    +'&order=created_at.desc&limit='+(limit||30));
-}
-let _sessionCtx='';
-async function _loadSessionCtx(){
-  try{const m=await loadSessionMemory();if(m){_sessionCtx=m;console.log('[Memory]',m.length,'chars');}}
-  catch(e){}
-}
-
-function initSupabase(){
-  loadSupabaseCreds();
-  setTimeout(()=>_preloadKnowledge().catch(()=>{}),500);
-}
-
-
 // ════════════════════════════════════════════════════════════════
-// CURATION REVIEW UI
+// REVIEW TAB: query queue → promote to knowledge base → export
 // ════════════════════════════════════════════════════════════════
-async function loadCurationQueue(){
-  const list=document.getElementById('curation-list');
-  const empty=document.getElementById('curation-empty');
-  const nocon=document.getElementById('curation-not-connected');
-  const count=document.getElementById('curation-count');
-  if(!list) return;
-  if(!_sbReady()){
-    if(nocon)nocon.style.display='block';
-    if(empty)empty.style.display='none';
-    list.innerHTML=''; return;
-  }
-  if(nocon)nocon.style.display='none';
-  list.innerHTML='<p style="color:var(--dim);font-size:12px;">Loading...</p>';
-  let rows=[];
-  try{ rows=await getCurationQueue(30)||[]; }
-  catch(e){
-    list.innerHTML='<p style="color:var(--red);font-size:12px;">Error loading queue: '+e.message+'</p>';
-    return;
-  }
-  console.log('[Curation] Fetched',rows.length,'rows from query_log');
-  if(!rows.length){
-    list.innerHTML='';
-    if(empty)empty.style.display='block';
-    if(count)count.textContent='0 pending';
-    loadKnowledgeBase(); return;
-  }
-  if(empty)empty.style.display='none';
-  if(count)count.textContent=rows.length+' pending';
+function renderReviewTab(){renderReviewQueue();renderKB();}
+
+function renderReviewQueue(){
+  const list=document.getElementById('curation-list'),empty=document.getElementById('curation-empty'),count=document.getElementById('curation-count');
+  if(!list)return;
+  const seen=new Set();
+  const rows=_lsGet('gs_qlog',[]).filter(r=>r.status==='new'&&r.prov).filter(r=>{const k=r.question.toLowerCase().trim();if(seen.has(k))return false;seen.add(k);return true;}).slice(0,30);
+  count.textContent=rows.length?rows.length+' awaiting review':'';
+  empty.style.display=rows.length?'none':'block';
   list.innerHTML=rows.map(r=>`
-    <div class="cur-card" id="cur-${r.id}">
-      <div class="cur-q">${escHtml(r.question||'')}</div>
-      <div class="cur-meta">
-        <span>\uD83D\uDCC5 ${(r.created_at||'').slice(0,16).replace('T',' ')}</span>
-        <span>\uD83E\uDD16 ${r.model_used||'unknown'}</span>
-        <span>${r.provenance_valid?'\u2705 Provenance OK':'\u26A0\uFE0F Needs manual check'}</span>
-      </div>
-      <div class="cur-code">${escHtml((r.generated_code||'(no code)').slice(0,600))}</div>
-      <div style="font-size:11px;color:var(--dim);margin-bottom:8px;max-height:60px;overflow:hidden;">
-        Result preview: ${escHtml((r.raw_result||'').slice(0,200))}
-      </div>
+    <div class="cur-card">
+      <div class="cur-q">${_hesc(r.question)}</div>
+      <div class="cur-meta"><span>${new Date(r.ts).toLocaleString('en-IN')}</span><span>search: ${_hesc(r.mode||'-')}</span></div>
+      <div class="cur-code">${_hesc(r.code)}</div>
+      <div class="cur-code" style="max-height:70px;opacity:.85">${_hesc(r.result.slice(0,400))}</div>
+      <textarea id="var-${r.id}" rows="2" placeholder="Other ways people might ask this — one per line (English / Hinglish / Marathi). Optional, but improves matching."
+        style="width:100%;box-sizing:border-box;font-size:11px;font-family:inherit;padding:6px 8px;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);margin-bottom:8px;"></textarea>
       <div class="cur-actions">
-        <button class="cur-btn-promote" onclick="promoteCuration('${r.id}','${escAttr(r.question)}','${escAttr(r.generated_code)}','${escAttr((r.raw_result||'').slice(0,200))}')">\u2705 Promote to Knowledge Base</button>
-        <button class="cur-btn-dismiss" onclick="dismissCuration('${r.id}')">\uD83D\uDDD1\uFE0F Dismiss</button>
+        <button class="cur-btn-promote" onclick="kbPromote('${r.id}')">✅ Correct — add to knowledge base</button>
+        <button class="cur-btn-dismiss" onclick="qlogDismiss('${r.id}')">🗑️ Dismiss</button>
       </div>
     </div>`).join('');
-  loadKnowledgeBase();
 }
-async function promoteCuration(id,question,code,resultSummary){
-  const card=document.getElementById('cur-'+id);
-  if(card){card.style.opacity='0.5';const b=card.querySelector('.cur-btn-promote');if(b){b.textContent='Promoting\u2026';b.disabled=true;}}
-  const ok=await promoteToKnowledge(id,question,code,resultSummary);
-  if(ok){
-    if(card)card.remove();
-    _sbCacheLoaded=false;_preloadKnowledge().catch(()=>{});
-    loadKnowledgeBase();showToast('\u2705 Promoted to knowledge base');
-  } else {
-    if(card){card.style.opacity='1';const b=card.querySelector('.cur-btn-promote');if(b){b.textContent='\u2705 Promote';b.disabled=false;}}
-    showToast('\u274C Promotion failed');
-  }
+function qlogDismiss(id){
+  _lsSet('gs_qlog',_lsGet('gs_qlog',[]).map(r=>r.id===id?{...r,status:'dismissed'}:r));
+  renderReviewQueue();
 }
-async function dismissCuration(id){
-  await _sbUpdate('query_log',id,{promoted:true,promoted_at:new Date().toISOString()});
-  const card=document.getElementById('cur-'+id);if(card)card.remove();
-  showToast('\uD83D\uDDD1\uFE0F Dismissed');
+async function kbPromote(id){
+  const r=_lsGet('gs_qlog',[]).find(x=>x.id===id);if(!r)return;
+  const variants=(document.getElementById('var-'+id)?.value||'').split('\n').map(s=>s.trim()).filter(Boolean);
+  const loc=_lsGet('gs_kb_local',{added:[],hidden:[]});
+  loc.added=loc.added||[];
+  loc.added.push({id:'u_'+Date.now().toString(36),question:r.question,variants,tags:[],code:r.code,created:new Date().toISOString().slice(0,10)});
+  _lsSet('gs_kb_local',loc);
+  _lsSet('gs_qlog',_lsGet('gs_qlog',[]).map(x=>x.id===id?{...x,status:'promoted'}:x));
+  await kbLoad(true);
+  showToast('✅ Added to knowledge base');
+  renderReviewTab();
+  if(_keyFor('gemini')){try{await kbEmbedMissing();renderKB();}catch(e){console.warn('[KB] embed failed:',e.message);}}
 }
-async function loadKnowledgeBase(){
-  const list=document.getElementById('kb-list');
-  const count=document.getElementById('kb-count');
-  if(!list||!_sbReady())return;
-  const rows=await _sbSelect('knowledge_patterns','order=use_count.desc&limit=50');
-  if(!rows||!rows.length){list.innerHTML='<p style="color:var(--dim);font-size:12px;">No patterns yet.</p>';if(count)count.textContent='0 patterns';return;}
-  if(count)count.textContent=rows.length+' patterns';
-  list.innerHTML=rows.map(r=>`
-    <div class="kb-card" id="kb-${r.id}">
-      <div class="kb-card-body">
-        <div class="kb-q">${escHtml(r.question||'')}</div>
-        <div class="kb-meta">Used ${r.use_count||0}\xd7 &middot; Added ${(r.created_at||'').slice(0,10)} &middot; Keywords: ${(r.keywords||[]).join(', ')}</div>
-      </div>
-      <button class="kb-btn-delete" onclick="deleteKbPattern('${r.id}')">Delete</button>
-    </div>`).join('');
+function kbRemove(id){
+  const p=KB.patterns.find(x=>x.id===id);if(!p)return;
+  if(!confirm('Remove this example from the knowledge base?'+(p.source==='repo'?'\n\n(It is stored in GitHub, so it is only hidden on this browser. Export and upload the file to remove it everywhere.)':'')))return;
+  const loc=_lsGet('gs_kb_local',{added:[],hidden:[]});
+  if(p.source==='local')loc.added=(loc.added||[]).filter(x=>x.id!==id);else loc.hidden=[...(loc.hidden||[]),id];
+  _lsSet('gs_kb_local',loc);
+  kbLoad(true).then(renderReviewTab);
 }
-async function deleteKbPattern(id){
-  if(!confirm('Remove this pattern from the knowledge base?'))return;
-  _sbKnowledgeCache=_sbKnowledgeCache.filter(p=>p.id!==id);
-  const card=document.getElementById('kb-'+id);if(card)card.remove();
-  showToast('Pattern removed from local cache');
+function kbReset(){
+  if(!confirm('Discard all additions and hidden items made on this browser?'))return;
+  localStorage.removeItem('gs_kb_local');kbLoad(true).then(()=>{renderReviewTab();showToast('Local changes cleared');});
 }
+function kbExport(){
+  const strip=it=>{
+    const texts=it.question!==undefined?_patTexts(it):_gloTexts(it);
+    const h=texts.map(_hash),v=h.map(x=>_vec.get(x));
+    const o={...it};delete o.source;delete o.emb;
+    if(v.every(Boolean))o.emb={model:_EMB.model,dim:_EMB.dim,h,v:v.map(a=>Array.from(a,x=>Math.round(x*1e4)/1e4))};
+    return o;
+  };
+  const out={version:1,meta:{exported:new Date().toISOString(),embedding_model:_EMB.model,dim:_EMB.dim,patterns:KB.patterns.length,glossary:KB.glossary.length},
+    patterns:KB.patterns.map(strip),glossary:KB.glossary.map(strip)};
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(out)],{type:'application/json'}));
+  a.download='knowledge_base.json';document.body.appendChild(a);a.click();a.remove();
+  const withEmb=[...out.patterns,...out.glossary].filter(x=>x.emb).length;
+  showToast('Exported '+out.patterns.length+' examples'+(withEmb<out.patterns.length+out.glossary.length?' (some without embeddings — add a Gemini key first for best results)':''));
+}
+async function kbComputeEmbeddings(){
+  const st=document.getElementById('kb-status');
+  try{
+    st.textContent='Computing embeddings…';
+    const r=await kbEmbedMissing();
+    st.textContent=r.reason||(r.done?'✅ Computed '+r.done+' embeddings':'✅ All embeddings already computed');
+  }catch(e){st.textContent='⚠️ '+e.message;}
+  renderKB();
+}
+function renderKB(){
+  const list=document.getElementById('kb-list');if(!list)return;
+  const miss=kbMissingTexts().length;
+  const total=[...KB.patterns.flatMap(_patTexts),...KB.glossary.flatMap(_gloTexts)].length;
+  document.getElementById('kb-count').textContent=KB.patterns.length+' examples · '+KB.glossary.length+' rules';
+  const st=document.getElementById('kb-status');
+  if(st&&!/Computing|⚠️/.test(st.textContent))st.textContent=
+    'Search mode: '+(total-miss>0&&_keyFor('gemini')?'hybrid (keyword + meaning)':'keyword only')+' · embeddings ready for '+(total-miss)+' of '+total+' texts'+(_keyFor('gemini')?'':' · add a Gemini key to enable meaning search');
+  list.innerHTML=KB.patterns.map(p=>`
+    <div class="kb-card"><div class="kb-card-body">
+      <div class="kb-q">${_hesc(p.question)}</div>
+      <div class="kb-meta">${p.source==='local'?'🟡 on this browser only':'🟢 in GitHub'} · ${(p.variants||[]).length} alternate phrasing(s) · ${_kbItemVecs(_patTexts(p)).length}/${_patTexts(p).length} embedded</div>
+    </div><button class="kb-btn-delete" onclick="kbRemove('${p.id}')">Remove</button></div>`).join('')||'<div style="color:var(--dim);font-size:12px;">Knowledge base is empty.</div>';
+}
+
+// ════════════════════════════════════════════════════════════════
+// TEST SET (golden questions) — answers are recomputed from the LIVE data
+// every run, so the tests stay valid after each Excel upload.
+// ════════════════════════════════════════════════════════════════
+function _orcMonth(){const ref=(DATA.exported_at||'').slice(0,10);let y=+ref.slice(0,4),m=+ref.slice(5,7)-1;if(m<1){m=12;y--;}return y+'-'+String(m).padStart(2,'0');}
+function _orcLedger(){
+  const ss=DATA.sales_summary||[],tp=new Map(),owner=new Map();
+  for(const r of ss){const id=String(r.reference_invoice_id||'');if(id.startsWith('PAY-'))continue;
+    tp.set(id,Math.max(0,(+r.total_bill||0)-(+r.discount_amount||0)-(+r.cash_received||0)-(+r.upi_received||0)));owner.set(id,r.customer_name);}
+  for(const r of ss){const id=String(r.reference_invoice_id||'');if(!id.startsWith('PAY-'))continue;const ref=r.reference_invoice;
+    if(ref&&tp.has(ref))tp.set(ref,Math.max(0,tp.get(ref)-((+r.cash_received||0)+(+r.upi_received||0)+(+r.discount_amount||0))));}
+  const by={};let n=0,total=0;
+  for(const [id,v] of tp){if(v>0.5){const x=Math.round(v);by[owner.get(id)]=(by[owner.get(id)]||0)+x;n++;total+=x;}}
+  const ranked=Object.entries(by).sort((a,b)=>b[1]-a[1]);
+  return{total,n,ranked,by};
+}
+function _orcProducts(){const m={};for(const r of DATA.stock_out||[])m[r.product_name]=(m[r.product_name]||0)+(+r.total_sale||0);return Object.entries(m).sort((a,b)=>b[1]-a[1]);}
+function _orcLocations(){const m={};for(const c of DATA.customers||[])if(c.location)m[c.location]=(m[c.location]||0)+1;return Object.entries(m).sort((a,b)=>b[1]-a[1]);}
+const _MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function _evBindings(){
+  const L=_orcLedger(),lm=_orcMonth();
+  return{C_TOP:(L.ranked[0]||[''])[0],C_MID:(L.ranked[9]||L.ranked[L.ranked.length-1]||[''])[0],
+    LAST_MONTH_NAME:_MONTHS[+lm.slice(5,7)-1]+' '+lm.slice(0,4),P_TOP:(_orcProducts()[0]||[''])[0],L_TOP:(_orcLocations()[0]||[''])[0]};
+}
+const _ORACLES={
+  total_outstanding:()=>_orcLedger().total,
+  pending_invoice_count:()=>_orcLedger().n,
+  top5_outstanding:()=>_orcLedger().ranked.slice(0,5).map(x=>x[0]),
+  'cust_outstanding:C_TOP':()=>_orcLedger().ranked[0][1],
+  'cust_outstanding:C_MID':()=>{const L=_orcLedger();return(L.ranked[9]||L.ranked[L.ranked.length-1])[1];},
+  revenue_last_month:()=>{const lm=_orcMonth();return(DATA.sales_summary||[]).filter(r=>!String(r.reference_invoice_id||'').startsWith('PAY-')&&(r.sale_date||'').startsWith(lm)).reduce((s,r)=>s+(+r.total_bill||0),0);},
+  gp_last_month:()=>{const lm=_orcMonth();return(DATA.stock_out||[]).filter(r=>(r.sale_date||'').startsWith(lm)).reduce((s,r)=>s+(+r.total_sale||0)-(+r.buying_rate_at_time||0),0);},
+  top3_products:()=>_orcProducts().slice(0,3).map(x=>x[0]),
+  collections_last_month:()=>{const lm=_orcMonth();return(DATA.sales_summary||[]).filter(r=>(r.sale_date||'').startsWith(lm)).reduce((s,r)=>s+(+r.cash_received||0)+(+r.upi_received||0),0);},
+  expenses_total:()=>(DATA.expenses||[]).reduce((s,e)=>s+(+e.total_expense||0),0),
+  top_expense_category:()=>{const m={};(DATA.expenses||[]).forEach(e=>{m[e.spent_on]=(m[e.spent_on]||0)+(+e.total_expense||0);});return[Object.entries(m).sort((a,b)=>b[1]-a[1])[0][0]];},
+  customers_in_top_location:()=>_orcLocations()[0][1],
+  stock_of_top_product:()=>{const p=(DATA.products||[]).find(x=>x.product_name===_orcProducts()[0][0]);return +p.current_stock||0;}
+};
+function _evBind(text,b){return String(text||'').replace(/\{(\w+)(:json)?\}/g,(m,k,j)=>b[k]===undefined?m:(j?JSON.stringify(b[k]):b[k]));}
+function _numbersIn(text){return(String(text).match(/-?\d[\d,]*(?:\.\d+)?/g)||[]).map(x=>parseFloat(x.replace(/,/g,''))).filter(n=>!isNaN(n));}
+function _evCheck(kind,expected,text,tol,ordered){
+  if(kind==='number'){const e=+expected;return _numbersIn(text).some(n=>Math.abs(n-e)<=Math.max(tol===0?0.5:1,Math.abs(e)*(tol||0.005)));}
+  if(kind==='names'){const low=String(text).toLowerCase();const idx=expected.map(n=>low.indexOf(String(n).toLowerCase()));
+    return idx.every(i=>i>=0)&&(!ordered||idx.every((v,i)=>i===0||v>idx[i-1]));}
+  return false;
+}
+function _fmtExpected(v){return Array.isArray(v)?v.join(' › '):(typeof v==='number'?Math.round(v).toLocaleString('en-IN'):String(v));}
+
+let _evalBusy=false;
+async function evalRun(mode){
+  if(_evalBusy)return;
+  const out=document.getElementById('eval-results'),st=document.getElementById('eval-status');
+  if(!DATA){st.textContent='Load data first.';return;}
+  _evalBusy=true;
+  const rows=[];const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  try{
+    st.textContent='Loading test set…';
+    const T=await _fetchRepoJson('golden_tests.json');
+    if(!T){st.textContent='⚠️ golden_tests.json not found in your GitHub repo (upload it next to index.html).';return;}
+    await kbLoad();
+    const B=_evBindings();
+    const draw=()=>{
+      const pass=rows.filter(r=>r.ok).length;
+      st.textContent=(rows.length?pass+' / '+rows.length+' passed':'Running…');
+      out.innerHTML='<table class="ledger-table" style="margin-top:8px"><thead><tr><th>Type</th><th>Test</th><th>Expected</th><th>Got</th><th></th></tr></thead><tbody>'
+        +rows.map(r=>`<tr class="${r.ok?'pay-row':'inv-row'}"><td>${_hesc(r.type)}</td><td>${_hesc(r.name)}</td><td style="font-size:10px">${_hesc(r.expected)}</td><td style="font-size:10px">${_hesc(String(r.got).slice(0,140))}</td><td>${r.ok?'✅':'❌'}${r.note?' <span style="font-size:10px;color:var(--dim)">'+_hesc(r.note)+'</span>':''}</td></tr>`).join('')+'</tbody></table>';
+      window._lastEval={at:new Date().toISOString(),mode,data:DATA.exported_at,rows};
+    };
+    // 1. retrieval tests — does the right example come back?
+    st.textContent='Retrieval tests…';
+    for(const t of T.retrieval_tests||[]){
+      const r=await ragRetrieve(_evBind(t.q,B),{keywordOnly:mode==='keyword'});
+      const ids=r.examples.map(e=>e.item.id),ok=ids.includes(t.expect);
+      rows.push({type:'retrieval',name:t.q,expected:t.expect,got:ids.join(', ')||'(nothing)',ok,note:r.mode});draw();
+    }
+    // 2. tool tests — the built-in helper functions vs independent calculation
+    for(const t of T.tool_tests||[]){
+      const exp=_ORACLES[t.oracle]();const s=sandboxExec(_evBind(t.code,B));
+      const ok=!s.error&&_evCheck(t.kind,exp,s.result,t.tol,t.ordered);
+      rows.push({type:'tool',name:_evBind(t.id,B),expected:_fmtExpected(exp),got:s.error||s.result,ok});draw();
+    }
+    // 3. full answer tests — runs the real pipeline with your API keys
+    if(mode==='full'){
+      for(const t of T.answer_tests||[]){
+        const q=_evBind(t.q,B),exp=_ORACLES[t.oracle]();
+        st.textContent='Asking: '+q.slice(0,60)+'…';
+        const o=await runPipeline(q,[{role:'user',content:q}],null,{log:false});
+        const got=o.error?('ERROR: '+o.error):o.result;
+        const ok=!o.error&&_evCheck(t.kind,exp,o.result,t.tol,t.ordered);
+        const ansOk=!o.error&&_evCheck(t.kind,exp,o.answer,t.tol,t.ordered);
+        rows.push({type:'answer',name:q,expected:_fmtExpected(exp),got,ok,note:o.error?'':(ansOk?'':'final wording lost the number')+(o.retrieved?' · '+o.retrieved.mode:'')});draw();
+        await sleep(1500);
+      }
+    }
+    draw();
+    const bad=rows.filter(r=>!r.ok).length;
+    st.textContent=(rows.length-bad)+' / '+rows.length+' passed'+(bad?' — '+bad+' failed':' 🎉');
+    document.getElementById('eval-dl').style.display='';
+  }catch(e){st.textContent='⚠️ '+e.message;console.error(e);}
+  finally{_evalBusy=false;}
+}
+function evalDownload(){
+  if(!window._lastEval)return;
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(window._lastEval,null,1)],{type:'application/json'}));
+  a.download='eval_report_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();
+}
+
+// ════════════════════════════════════════════════════════════════
+// API KEY VAULT — keys encrypted (AES-256-GCM, PBKDF2) in ai_keys.enc.json
+// in your GitHub repo. Only someone with the passphrase can decrypt them.
+// ════════════════════════════════════════════════════════════════
+let _vaultKeys={};
+function _keyFor(p){return _vaultKeys[p]||localStorage.getItem(_PROVIDERS[p].keyStore)||'';}
+function _restoreVault(){try{const v=JSON.parse(sessionStorage.getItem('gs_vault_session')||'null');if(v)_vaultKeys=v;}catch(e){}_vaultStatus();}
+function _vaultStatus(msg,isErr){
+  const el=document.getElementById('vault-status');if(!el)return;
+  el.textContent=msg||(Object.keys(_vaultKeys).length?'🔓 Unlocked: '+Object.keys(_vaultKeys).join(', ')+' (this tab only)':'Locked');
+  el.style.color=isErr?'var(--red)':(Object.keys(_vaultKeys).length?'var(--green)':'var(--dim)');
+}
+async function _vaultDecrypt(enc,pass){
+  const b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(enc.salt),iterations:enc.iter,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['decrypt']);
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(enc.iv)},key,b64(enc.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+async function vaultUnlock(){
+  const inp=document.getElementById('vault-pass'),pass=inp.value;
+  if(!pass){_vaultStatus('Enter the passphrase',true);return;}
+  try{
+    _vaultStatus('Unlocking…');
+    const enc=await _fetchRepoJson('ai_keys.enc.json');
+    if(!enc){_vaultStatus('ai_keys.enc.json not found in your GitHub repo',true);return;}
+    const keys=await _vaultDecrypt(enc,pass);
+    _vaultKeys={};['groq','gemini'].forEach(p=>{if(keys[p])_vaultKeys[p]=String(keys[p]).trim();});
+    try{sessionStorage.setItem('gs_vault_session',JSON.stringify(_vaultKeys));}catch(e){}
+    if(document.getElementById('vault-remember')?.checked)Object.entries(_vaultKeys).forEach(([p,k])=>localStorage.setItem(_PROVIDERS[p].keyStore,k));
+    inp.value='';_vaultStatus();
+    const pk=document.getElementById('ap-key');if(pk)pk.value=_keyFor(_currentProvider);
+    _kbAutoEmbedded=false;kbInit();
+  }catch(e){_vaultStatus('Wrong passphrase, or the vault file is damaged',true);}
+}
+
 function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function escAttr(s){return(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' ').replace(/\r/g,'');}
 function showToast(msg){
@@ -3774,6 +4001,14 @@ function renderExpiryTable(){
     <label id="ap-key-label">Groq API Key</label>
     <div class="ap-key-row" style="margin-top:3px;"><input type="password" id="ap-key" placeholder="gsk_..." autocomplete="off"><button id="ap-save" onclick="saveKey()">Save</button></div>
     <p class="ap-hint" id="ap-hint">Free at <a href="https://console.groq.com" target="_blank">console.groq.com</a> &middot; No credit card</p>
+    <details style="margin-top:8px;"><summary style="font-size:11px;cursor:pointer;color:var(--dim);">🔐 Use encrypted keys from GitHub</summary>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <input type="password" id="vault-pass" placeholder="Vault passphrase" autocomplete="off" onkeydown="if(event.key==='Enter')vaultUnlock()" style="flex:1;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;">
+        <button type="button" onclick="vaultUnlock()" style="padding:6px 12px;font-size:12px;font-weight:600;border:none;border-radius:5px;background:var(--accent);color:#fff;cursor:pointer;">Unlock</button>
+      </div>
+      <label style="font-size:10px;display:flex;gap:5px;align-items:center;margin-top:5px;color:var(--dim);"><input type="checkbox" id="vault-remember"> Remember the keys on this device</label>
+      <p id="vault-status" style="font-size:10px;margin:4px 0 0;color:var(--dim);">Locked</p>
+    </details>
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
       <label>Voice Input</label>
       <select id="ap-mic-mode" onchange="onMicModeChange()" style="width:100%;padding:6px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border);border-radius:5px;background:#fafafa;margin-top:2px;">

@@ -1,0 +1,192 @@
+{
+ "version": 1,
+ "note": "Expected answers are recalculated from the live data on every run, so these stay valid after each upload. {PLACEHOLDERS} are filled in from your data.",
+ "retrieval_tests": [
+  {
+   "q": "total pending amount from all customers",
+   "expect": "seed_total_outstanding"
+  },
+  {
+   "q": "total baaki kitna hai",
+   "expect": "seed_total_outstanding"
+  },
+  {
+   "q": "who owes me the most",
+   "expect": "seed_top_debtors"
+  },
+  {
+   "q": "how much does {C_MID} owe",
+   "expect": "seed_customer_outstanding"
+  },
+  {
+   "q": "pending bills of {C_MID}",
+   "expect": "seed_customer_pending_invoices"
+  },
+  {
+   "q": "{C_MID} ka kitna baaki hai",
+   "expect": "seed_customer_outstanding"
+  },
+  {
+   "q": "sales last month",
+   "expect": "seed_revenue_month"
+  },
+  {
+   "q": "pichle mahine ka nafa",
+   "expect": "seed_gp_month"
+  },
+  {
+   "q": "top selling products",
+   "expect": "seed_top_products_revenue"
+  },
+  {
+   "q": "which products are about to run out of stock",
+   "expect": "seed_stock_cover_low"
+  },
+  {
+   "q": "products expiring soon",
+   "expect": "seed_expiring_stock"
+  },
+  {
+   "q": "kharcha kitna hua",
+   "expect": "seed_expenses"
+  },
+  {
+   "q": "which customers pay late",
+   "expect": "seed_late_customers"
+  },
+  {
+   "q": "how many boxes of {P_TOP} do we have in stock",
+   "expect": "seed_product_stock"
+  },
+  {
+   "q": "cash and upi collection last month",
+   "expect": "seed_collections_month"
+  },
+  {
+   "q": "what is the value of my inventory",
+   "expect": "seed_inventory_value"
+  }
+ ],
+ "tool_tests": [
+  {
+   "id": "total outstanding",
+   "oracle": "total_outstanding",
+   "kind": "number",
+   "tol": 0.001,
+   "code": "return getAllOutstanding().reduce((s,r)=>s+r.outstanding,0);"
+  },
+  {
+   "id": "pending invoice count",
+   "oracle": "pending_invoice_count",
+   "kind": "number",
+   "tol": 0,
+   "code": "return getPendingInvoices(null).length;"
+  },
+  {
+   "id": "top 5 debtors (order)",
+   "oracle": "top5_outstanding",
+   "kind": "names",
+   "ordered": true,
+   "code": "return getAllOutstanding().slice(0,5).map(r=>r.customer).join(' | ');"
+  },
+  {
+   "id": "one customer: {C_TOP}",
+   "oracle": "cust_outstanding:C_TOP",
+   "kind": "number",
+   "tol": 0.001,
+   "code": "return getCustomerOutstanding({C_TOP:json}).total_outstanding;"
+  },
+  {
+   "id": "one customer: {C_MID}",
+   "oracle": "cust_outstanding:C_MID",
+   "kind": "number",
+   "tol": 0.001,
+   "code": "return getCustomerOutstanding({C_MID:json}).total_outstanding;"
+  }
+ ],
+ "answer_tests": [
+  {
+   "q": "What is the total outstanding amount across all customers?",
+   "oracle": "total_outstanding",
+   "kind": "number",
+   "tol": 0.001
+  },
+  {
+   "q": "total baaki kitna hai",
+   "oracle": "total_outstanding",
+   "kind": "number",
+   "tol": 0.001
+  },
+  {
+   "q": "Which 5 customers owe the most? Rank them.",
+   "oracle": "top5_outstanding",
+   "kind": "names",
+   "ordered": true
+  },
+  {
+   "q": "How much does {C_TOP} owe us?",
+   "oracle": "cust_outstanding:C_TOP",
+   "kind": "number",
+   "tol": 0.001
+  },
+  {
+   "q": "{C_MID} ka kitna baaki hai?",
+   "oracle": "cust_outstanding:C_MID",
+   "kind": "number",
+   "tol": 0.001
+  },
+  {
+   "q": "How many pending invoices do we have in total?",
+   "oracle": "pending_invoice_count",
+   "kind": "number",
+   "tol": 0
+  },
+  {
+   "q": "What were our total sales in {LAST_MONTH_NAME}?",
+   "oracle": "revenue_last_month",
+   "kind": "number",
+   "tol": 0.001
+  },
+  {
+   "q": "How much gross profit did we make last month?",
+   "oracle": "gp_last_month",
+   "kind": "number",
+   "tol": 0.001
+  },
+  {
+   "q": "Top 3 products by revenue",
+   "oracle": "top3_products",
+   "kind": "names",
+   "ordered": true
+  },
+  {
+   "q": "How much did we collect last month, cash plus UPI together?",
+   "oracle": "collections_last_month",
+   "kind": "number",
+   "tol": 0.001
+  },
+  {
+   "q": "What are our total expenses so far?",
+   "oracle": "expenses_total",
+   "kind": "number",
+   "tol": 0.001
+  },
+  {
+   "q": "Which expense category costs us the most?",
+   "oracle": "top_expense_category",
+   "kind": "names"
+  },
+  {
+   "q": "How many customers do we have in {L_TOP}?",
+   "oracle": "customers_in_top_location",
+   "kind": "number",
+   "tol": 0
+  },
+  {
+   "q": "How many units of {P_TOP} are in stock right now?",
+   "oracle": "stock_of_top_product",
+   "kind": "number",
+   "tol": 0
+  }
+ ]
+}
